@@ -4,7 +4,7 @@
 //| Também: ações e opções (direcional simples; ver aviso)           |
 //+------------------------------------------------------------------+
 #property copyright "Quant Starter"
-#property version   "1.30"
+#property version   "1.31"
 #property strict
 #property description "Clear B3: WIN / ações / opções — EMA ou MeanRev + sessão + risco"
 
@@ -200,28 +200,60 @@ int OnInit()
          return INIT_FAILED;
      }
 
-   PrintFormat("QuantStarter v1.30 Clear | %s %s | profile=%s | mode=%s | risk=%.2f%% | session=%s | slip=%d",
+   PrintFormat("QuantStarter v1.31 Clear | %s %s | profile=%s | mode=%s | risk=%.2f%% | session=%s | slip=%d",
                _Symbol, EnumToString(_Period),
                EnumToString(InpProfile), EnumToString(InpStrategy),
                g_risk_percent, EnumToString(g_session_mode), g_deviation);
+
+   if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED))
+      Print("ATENÇÃO: Algo Trading desligado na toolbar (botão Algo Trading).");
+   if(!MQLInfoInteger(MQL_TRADE_ALLOWED))
+      Print("ATENÇÃO: negociação automática bloqueada nas propriedades do EA / opções.");
+
+   UpdateChartStatus("iniciado — aguardando barra/sessão");
    return INIT_SUCCEEDED;
   }
 
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
   {
+   Comment("");
    g_momentum.Release();
    g_meanrev.Release();
   }
 
 //+------------------------------------------------------------------+
+void UpdateChartStatus(const string detail)
+  {
+   string trade_ok = TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) ? "AlgoTrading ON" : "AlgoTrading OFF";
+   string sess = g_session.IsTradable() ? "SESSAO OK" : "FORA DA SESSAO";
+   Comment(
+      "QuantStarter v1.31\n",
+      "Simbolo: ", _Symbol, " | ", EnumToString(_Period), "\n",
+      "Perfil: ", EnumToString(InpProfile), " | ", EnumToString(InpStrategy), "\n",
+      trade_ok, " | ", sess, "\n",
+      detail, "\n",
+      "Horario servidor: ", TimeToString(TimeCurrent(), TIME_DATE|TIME_MINUTES)
+   );
+  }
+
+//+------------------------------------------------------------------+
 void OnTick()
   {
-   if(InpOnlyNewBar && !IsNewBar())
-      return;
-
+   // status no gráfico mesmo fora da sessão / sem trade
    if(!g_session.IsTradable())
+     {
+      UpdateChartStatus("aguardando horario B3 (normal de madrugada/fds)");
       return;
+     }
+
+   if(InpOnlyNewBar && !IsNewBar())
+     {
+      UpdateChartStatus("na sessao — aguardando nova barra / sinal");
+      return;
+     }
+
+   UpdateChartStatus("na sessao — avaliando sinal");
 
    ENUM_TRADE_SIGNAL signal = SIGNAL_NONE;
    double atr = 0.0;
@@ -238,13 +270,17 @@ void OnTick()
      }
 
    if(signal == SIGNAL_NONE || atr <= 0.0)
+     {
+      UpdateChartStatus("na sessao — sem sinal nesta barra");
       return;
+     }
 
    double sl_dist = atr * InpATR_SL;
    double tp_dist = atr * InpATR_TP;
    double lots    = g_risk.LotSize(_Symbol, sl_dist);
    if(lots <= 0.0)
      {
+      UpdateChartStatus("ERRO: lote invalido — rode SymbolDiagnostics");
       Print("[EA] Lote inválido — SymbolDiagnostics no gráfico Clear");
       return;
      }
@@ -255,7 +291,8 @@ void OnTick()
          g_trade.CloseAll(_Symbol);
       if(!g_risk.CanOpenTrade(_Symbol, g_trade.Magic()))
          return;
-      g_trade.OpenBuy(_Symbol, lots, sl_dist, tp_dist);
+      if(g_trade.OpenBuy(_Symbol, lots, sl_dist, tp_dist))
+         UpdateChartStatus(StringFormat("BUY enviado | lote %.2f", lots));
      }
    else if(signal == SIGNAL_SELL)
      {
@@ -263,7 +300,8 @@ void OnTick()
          g_trade.CloseAll(_Symbol);
       if(!g_risk.CanOpenTrade(_Symbol, g_trade.Magic()))
          return;
-      g_trade.OpenSell(_Symbol, lots, sl_dist, tp_dist);
+      if(g_trade.OpenSell(_Symbol, lots, sl_dist, tp_dist))
+         UpdateChartStatus(StringFormat("SELL enviado | lote %.2f", lots));
      }
   }
 
