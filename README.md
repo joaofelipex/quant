@@ -15,14 +15,28 @@ python/
   reports/
 ```
 
-## Instalação no MT5
+## Clear MT5 (já detectado nesta máquina)
 
-1. MT5 → **Arquivo → Abrir Pasta de Dados**
-2. Copie `mql5/` → pasta `MQL5/` do terminal
-3. MetaEditor (**F4**) → **F7** em cada `.mq5`
-4. No Market Watch, habilite o símbolo B3 (WIN, WDO, PETR4…)
-5. Rode `SymbolDiagnostics` no gráfico antes do backtest
-6. Strategy Tester (**Ctrl+R**) em demo
+Terminal: **Clear Investimentos MT5**  
+Pasta de dados: `%APPDATA%\MetaQuotes\Terminal\698B86206820B42976F30D28CAC50412\MQL5`
+
+O EA/indicador/script já foram **copiados e compilados** (0 erros) nessa pasta.
+
+### No terminal Clear — próximos cliques
+
+1. No MT5 Clear: clique direito no Navegador → **Atualizar**
+2. **Observação do mercado** (Ctrl+M) → clique direito → **Símbolos** → busque:
+   - `WIN$` / `WIN$N` — mini índice (série contínua / atual)
+   - `WDO$` / `WDO$N` — mini dólar
+   - ou vencimento: `WINQ26`, `WDOQ26`… (letra do mês + ano)
+   - ações: `PETR4`, `VALE3`…
+3. Arraste o símbolo no gráfico
+4. Navegador → **Expert Advisors → QuantStarter** → arraste no gráfico
+5. Sessão do EA: `Futures Day` para WIN/WDO · `Equity` para ações
+6. Rode o script **SymbolDiagnostics** uma vez (valida tick value em R$)
+7. Backtest: **Ctrl+R** (Strategy Tester) em conta demo antes de real
+
+Algo Trading só depois do tester. Em conta real, comece com risco baixo (0,5%).
 
 ## Sessões B3 (defaults)
 
