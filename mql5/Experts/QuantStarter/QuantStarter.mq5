@@ -1,15 +1,15 @@
 //+------------------------------------------------------------------+
 //| QuantStarter.mq5                                                 |
-//| EA quant: momentum (EMA) ou mean reversion (BB+RSI)              |
-//| + filtro de sessão + ATR stops + risco % equity                  |
+//| EA quant B3: momentum (EMA) ou mean reversion (BB+RSI)           |
+//| + sessão B3 + ATR stops + risco % equity                         |
 //|                                                                  |
-//| Instalação: copie Experts\QuantStarter para MQL5\Experts\        |
-//| Compile no MetaEditor (F7) → Strategy Tester (Ctrl+R)            |
+//| Foque em WIN/WDO ou ações (PETR4, VALE3...). Confira o nome do   |
+//| símbolo no Market Watch do seu broker MT5.                       |
 //+------------------------------------------------------------------+
 #property copyright "Quant Starter"
-#property version   "1.10"
+#property version   "1.20"
 #property strict
-#property description "EA quant: EMA/MeanRev + sessão + ATR + risk %"
+#property description "EA quant B3: EMA/MeanRev + sessão B3 + ATR + risk %"
 
 #include "Include\RiskManager.mqh"
 #include "Include\SignalEngine.mqh"
@@ -25,8 +25,8 @@ enum ENUM_STRATEGY_MODE
 
 input group "=== Estratégia ==="
 input ENUM_STRATEGY_MODE InpStrategy     = STRATEGY_MOMENTUM; // Modo
-input int               InpFastEMA       = 12;          // EMA rápida (momentum)
-input int               InpSlowEMA       = 26;          // EMA lenta (momentum)
+input int               InpFastEMA       = 9;           // EMA rápida (momentum)
+input int               InpSlowEMA       = 21;          // EMA lenta (momentum)
 input int               InpBBPeriod      = 20;          // Bollinger período
 input double            InpBBDeviation   = 2.0;         // Bollinger desvio
 input int               InpRSIPeriod     = 14;          // RSI período
@@ -34,27 +34,29 @@ input double            InpRSI_OS        = 30.0;        // RSI oversold
 input double            InpRSI_OB        = 70.0;        // RSI overbought
 input int               InpATRPeriod     = 14;          // Período ATR
 input double            InpATR_SL        = 1.5;         // SL = ATR * fator
-input double            InpATR_TP        = 2.5;         // TP = ATR * fator
-input double            InpMinATRPoints  = 50;          // ATR mín. (pontos) — só momentum
+input double            InpATR_TP        = 2.0;         // TP = ATR * fator
+input double            InpMinATRPoints  = 0;           // ATR mín. (0=desliga). WIN: tente 80–150
 
-input group "=== Sessão (hora do servidor) ==="
-input ENUM_TRADE_SESSION InpSession      = SESSION_OVERLAP; // Janela
-input int               InpLondonStart   = 8;           // Londres início
-input int               InpLondonEnd     = 17;          // Londres fim
-input int               InpNYStart       = 13;          // NY início
-input int               InpNYEnd         = 22;          // NY fim
+input group "=== Sessão B3 (hora do servidor) ==="
+input ENUM_TRADE_SESSION InpSession      = SESSION_B3_EQUITY; // Janela
+input int               InpCustomStartH  = 10;          // Custom início (h)
+input int               InpCustomStartM  = 15;          // Custom início (min)
+input int               InpCustomEndH    = 16;          // Custom fim (h)
+input int               InpCustomEndM    = 45;          // Custom fim (min)
+input int               InpSkipOpenMin   = 15;          // Pular minutos pós-abertura
 input bool              InpSkipFridayLate= true;        // Bloquear sexta tarde
-input int               InpFridayCutoff  = 16;          // Corte sexta (hora)
+input int               InpFridayCutH    = 16;          // Corte sexta (h)
+input int               InpFridayCutM    = 30;          // Corte sexta (min)
 
 input group "=== Risco ==="
-input double            InpRiskPercent   = 1.0;         // Risco % equity / trade
-input double            InpMaxDailyLoss  = 3.0;         // Perda máx. diária (%)
+input double            InpRiskPercent   = 0.5;         // Risco % equity / trade (B3: comece baixo)
+input double            InpMaxDailyLoss  = 2.0;         // Perda máx. diária (%)
 input int               InpMaxPositions  = 1;           // Máx. posições
 input bool              InpReverseOnSignal= true;       // Fecha e inverte no sinal oposto
 
 input group "=== Execução ==="
 input ulong             InpMagic         = 20260803;    // Magic number
-input int               InpDeviation     = 20;          // Slippage (pontos)
+input int               InpDeviation     = 50;          // Slippage (pontos) — ações B3 variam
 input bool              InpOnlyNewBar    = true;        // Só em barra nova
 
 CRiskManager    g_risk;
@@ -75,8 +77,11 @@ int OnInit()
 
    g_risk.Configure(InpRiskPercent, InpMaxDailyLoss, InpMaxPositions);
    g_trade.Configure(InpMagic, InpDeviation, "QuantStarter");
-   g_session.Configure(InpSession, InpLondonStart, InpLondonEnd,
-                       InpNYStart, InpNYEnd, InpSkipFridayLate, InpFridayCutoff);
+   g_session.Configure(InpSession,
+                       InpCustomStartH, InpCustomStartM,
+                       InpCustomEndH, InpCustomEndM,
+                       InpSkipOpenMin, InpSkipFridayLate,
+                       InpFridayCutH, InpFridayCutM);
 
    if(InpStrategy == STRATEGY_MOMENTUM)
      {
@@ -91,10 +96,11 @@ int OnInit()
          return INIT_FAILED;
      }
 
-   PrintFormat("QuantStarter v1.10 | %s %s | mode=%s | risk=%.2f%% | %s",
+   PrintFormat("QuantStarter v1.20 B3 | %s %s | mode=%s | risk=%.2f%% | %s",
                _Symbol, EnumToString(_Period),
                EnumToString(InpStrategy), InpRiskPercent,
                EnumToString(InpSession));
+   Print("Dica: rode SymbolDiagnostics no gráfico para validar tick value (WIN/WDO/ações).");
    return INIT_SUCCEEDED;
   }
 
@@ -136,7 +142,7 @@ void OnTick()
    double lots    = g_risk.LotSize(_Symbol, sl_dist);
    if(lots <= 0.0)
      {
-      Print("[EA] Lote inválido — verifique margem/símbolo");
+      Print("[EA] Lote inválido — rode SymbolDiagnostics e confira margem/símbolo B3");
       return;
      }
 
