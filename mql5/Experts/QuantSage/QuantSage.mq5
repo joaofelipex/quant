@@ -12,7 +12,7 @@
 //| Anexe pelo Navegador (NAO pelo debugger F5 do MetaEditor).       |
 //+------------------------------------------------------------------+
 #property copyright "QuantSage"
-#property version   "2.00"
+#property version   "2.01"
 #property strict
 #property description "QuantSage: edge score + regime ER + risco B3/Clear"
 
@@ -84,7 +84,7 @@ int OnInit()
    EventSetTimer(1); // status mesmo sem ticks (mercado fechado)
    g_last_detail = "anexado — aguardando";
    RefreshComment();
-   PrintFormat("QuantSage v2.00 | %s %s | score_min=%.0f | risk=%.2f%%",
+   PrintFormat("QuantSage v2.01 | %s %s | score_min=%.0f | risk=%.2f%%",
                _Symbol, EnumToString(_Period), InpMinScore, InpRiskPercent);
    if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED))
       Print("ATENCAO: ligue o botao Algo Trading (verde).");
@@ -201,7 +201,7 @@ void RefreshComment()
    if(g_last_edge.regime == QS_REGIME_RANGE) reg = "RANGE";
 
    Comment(
-      "======== QuantSage v2.00 ========\n",
+      "======== QuantSage v2.01 ========\n",
       _Symbol, " | ", EnumToString(_Period), " | ", conn, "\n",
       algo, " | ", g_session.Text(), "\n",
       "Regime: ", reg,

@@ -142,7 +142,10 @@ public:
 
       double lots = risk_money / loss_1;
       lots = MathFloor(lots / lot_step) * lot_step;
-      return MathMax(vol_min, MathMin(vol_max, lots));
+      // NÃO forçar vol_min: se o risco não cabe num lote, não opera
+      if(lots < vol_min - 1e-12)
+         return 0.0;
+      return MathMin(vol_max, lots);
      }
 
    int LossStreak() const { return m_loss_streak; }

@@ -47,7 +47,7 @@ double MathStdev(const double &arr[], const int count, const double mean)
    return MathSqrt(v / (count - 1));
   }
 
-// z-score do close[1] vs média/desvio dos closes [1..period]
+// z-score do close fechado vs média/desvio dos closes ANTERIORES (sem autoinclusão)
 bool MathCloseZScore(const string symbol, const ENUM_TIMEFRAMES tf,
                      const int period, double &z_out)
   {
@@ -56,10 +56,15 @@ bool MathCloseZScore(const string symbol, const ENUM_TIMEFRAMES tf,
       return false;
    double close[];
    ArraySetAsSeries(close, true);
-   if(CopyClose(symbol, tf, 1, period, close) < period)
+   // close[0]=barra fechada atual; close[1..period]=histórico para mean/sd
+   if(CopyClose(symbol, tf, 1, period + 1, close) < period + 1)
       return false;
-   double mean = MathSMA(close, period);
-   double sd = MathStdev(close, period, mean);
+   double hist[];
+   ArrayResize(hist, period);
+   for(int i = 0; i < period; i++)
+      hist[i] = close[i + 1];
+   double mean = MathSMA(hist, period);
+   double sd = MathStdev(hist, period, mean);
    if(sd <= 0.0)
       return false;
    z_out = (close[0] - mean) / sd;

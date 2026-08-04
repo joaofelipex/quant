@@ -160,16 +160,20 @@ public:
          score += 25; // regime claro
          score += 20 * MathMin(1.0, (e.er - m_er_trend) / (1.0 - m_er_trend + 1e-9));
 
-         if(bull && (cross_up || (rsi[0] > 50 && rsi[0] < 70 && rsi[0] >= rsi[1])))
+         // pullback real: RSI veio de zona fria/quente OU cross fresco
+         bool pb_buy  = (bull && rsi[1] < 45 && rsi[0] > rsi[1] && rsi[0] < 60);
+         bool pb_sell = (bear && rsi[1] > 55 && rsi[0] < rsi[1] && rsi[0] > 40);
+
+         if(bull && (cross_up || pb_buy))
            {
             e.signal = QS_SIGNAL_BUY;
-            score += cross_up ? 35 : 25;
+            score += cross_up ? 35 : 28;
             why = cross_up ? "trend BUY cross" : "trend BUY pullback RSI";
            }
-         else if(bear && (cross_dn || (rsi[0] < 50 && rsi[0] > 30 && rsi[0] <= rsi[1])))
+         else if(bear && (cross_dn || pb_sell))
            {
             e.signal = QS_SIGNAL_SELL;
-            score += cross_dn ? 35 : 25;
+            score += cross_dn ? 35 : 28;
             why = cross_dn ? "trend SELL cross" : "trend SELL pullback RSI";
            }
          else
