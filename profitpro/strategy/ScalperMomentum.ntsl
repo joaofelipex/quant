@@ -1,0 +1,123 @@
+/////////////////////////////////////
+// SCALPER MOMENTUM - aproximacao  //
+// NAO TESTADO - use com cautela   //
+/////////////////////////////////////
+
+parâmetro
+EmaRapida(5);
+EmaLenta(13);
+PontosStop(100);
+PontosAlvo(150);
+
+var
+sEmaRapida     : Real;
+sEmaLenta      : Real;
+sPrevEmaRapida : Real;
+sPrevEmaLenta  : Real;
+tendeAlta      : booleano;
+tendeBaixa     : booleano;
+cenarioCompra  : booleano;
+cenarioVenda   : booleano;
+precoStop      : Real;
+precoAlvo      : Real;
+
+begin
+
+sEmaRapida :=
+  mediaexp(EmaRapida,
+    Fechamento);
+
+sEmaLenta :=
+  mediaexp(EmaLenta,
+    Fechamento);
+
+sPrevEmaRapida :=
+  sEmaRapida[1];
+
+sPrevEmaLenta :=
+  sEmaLenta[1];
+
+tendeAlta :=
+  (sPrevEmaRapida <
+   sPrevEmaLenta)
+  e
+  (sEmaRapida >
+   sEmaLenta);
+
+tendeBaixa :=
+  (sPrevEmaRapida >
+   sPrevEmaLenta)
+  e
+  (sEmaRapida <
+   sEmaLenta);
+
+cenarioCompra :=
+  tendeAlta;
+
+cenarioVenda :=
+  tendeBaixa;
+
+Begin
+
+Se (BuyPosition > 0)
+e
+(Fechamento <=
+ precoStop)
+então
+BuyToCoverAtMarket;
+
+Se (BuyPosition > 0)
+e
+(Fechamento >=
+ precoAlvo)
+então
+BuyToCoverAtMarket;
+
+Se (SellPosition > 0)
+e
+(Fechamento >=
+ precoStop)
+então
+SellToCoverAtMarket;
+
+Se (SellPosition > 0)
+e
+(Fechamento <=
+ precoAlvo)
+então
+SellToCoverAtMarket;
+
+se cenarioCompra então
+
+inicio
+Se(sellposition > 0)
+então
+SellToCoverAtMarket;
+precoStop :=
+  Fechamento -
+  PontosStop;
+precoAlvo :=
+  Fechamento +
+  PontosAlvo;
+paintbar(clgreen);
+BuyAtMarket;
+fim
+
+senão se cenarioVenda
+então
+
+inicio
+Se(BuyPosition > 0)
+então
+BuyToCoverAtMarket;
+precoStop :=
+  Fechamento +
+  PontosStop;
+precoAlvo :=
+  Fechamento -
+  PontosAlvo;
+paintbar(clred);
+SellShortAtMarket;
+fim;
+end;
+end.

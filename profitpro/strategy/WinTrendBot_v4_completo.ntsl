@@ -1,0 +1,211 @@
+/////////////////////////////////////
+// WINTRENDBOT V4 - versao completa //
+// EMA + Donchian + ATR + regime ER //
+// (a estrategia original validada) //
+/////////////////////////////////////
+{ NOVO: usa funcoes achadas no manual   }
+{ (Highest, Lowest, TrueHigh, TrueLow,  }
+{ Summation, ABS, Time) - nao testadas  }
+{ ainda neste editor especifico.        }
+{ Compilar e testar antes de usar.      }
+
+parâmetro
+EmaRapida(9);
+EmaLenta(21);
+PerDonchian(20);
+PerATR(14);
+PerER(20);
+LimiarER(0.5);
+MultStopATR(1.5);
+RiscoRetorno(2.0);
+HoraFecha(1750);
+
+var
+sEmaRapida    : Real;
+sEmaLenta     : Real;
+canalSup      : Real;
+canalInf      : Real;
+trueRange     : Real;
+valorATR      : Real;
+variacaoAbs   : Real;
+mudanca       : Real;
+caminho       : Real;
+er            : Real;
+tendeAlta     : booleano;
+tendeBaixa    : booleano;
+regimeOk      : booleano;
+cenarioCompra : booleano;
+cenarioVenda  : booleano;
+distStop      : Real;
+precoStop     : Real;
+precoAlvo     : Real;
+
+begin
+
+sEmaRapida :=
+  mediaexp(EmaRapida,
+    Fechamento);
+
+sEmaLenta :=
+  mediaexp(EmaLenta,
+    Fechamento);
+
+canalSup :=
+  Highest(Maxima,
+    PerDonchian);
+
+canalInf :=
+  Lowest(Minima,
+    PerDonchian);
+
+trueRange :=
+  TrueHigh() -
+  TrueLow();
+
+valorATR :=
+  mediaexp(PerATR,
+    trueRange);
+
+variacaoAbs :=
+  ABS(Fechamento -
+    Fechamento[1]);
+
+mudanca :=
+  ABS(Fechamento -
+    Fechamento[PerER]);
+
+caminho :=
+  Summation(
+    variacaoAbs,
+    PerER);
+
+Se caminho > 0
+então
+er :=
+  mudanca /
+  caminho
+senão
+er := 0;
+
+tendeAlta :=
+  sEmaRapida >
+  sEmaLenta;
+
+tendeBaixa :=
+  sEmaRapida <
+  sEmaLenta;
+
+regimeOk :=
+  er >= LimiarER;
+
+cenarioCompra :=
+  (regimeOk)
+  e
+  (tendeAlta)
+  e
+  (Fechamento >
+   canalSup[1]);
+
+cenarioVenda :=
+  (regimeOk)
+  e
+  (tendeBaixa)
+  e
+  (Fechamento <
+   canalInf[1]);
+
+Begin
+
+Se (BuyPosition > 0)
+e
+(Time >=
+ HoraFecha)
+então
+BuyToCoverAtMarket;
+
+Se (SellPosition > 0)
+e
+(Time >=
+ HoraFecha)
+então
+SellToCoverAtMarket;
+
+Se (BuyPosition > 0)
+e
+(Fechamento <=
+ precoStop)
+então
+BuyToCoverAtMarket;
+
+Se (BuyPosition > 0)
+e
+(Fechamento >=
+ precoAlvo)
+então
+BuyToCoverAtMarket;
+
+Se (SellPosition > 0)
+e
+(Fechamento >=
+ precoStop)
+então
+SellToCoverAtMarket;
+
+Se (SellPosition > 0)
+e
+(Fechamento <=
+ precoAlvo)
+então
+SellToCoverAtMarket;
+
+Se (Time <
+    HoraFecha)
+então
+
+inicio
+
+se cenarioCompra então
+
+inicio
+Se(sellposition > 0)
+então
+SellToCoverAtMarket;
+distStop :=
+  valorATR *
+  MultStopATR;
+precoStop :=
+  Fechamento -
+  distStop;
+precoAlvo :=
+  Fechamento +
+  distStop *
+  RiscoRetorno;
+paintbar(clgreen);
+BuyAtMarket;
+fim
+
+senão se cenarioVenda
+então
+
+inicio
+Se(BuyPosition > 0)
+então
+BuyToCoverAtMarket;
+distStop :=
+  valorATR *
+  MultStopATR;
+precoStop :=
+  Fechamento +
+  distStop;
+precoAlvo :=
+  Fechamento -
+  distStop *
+  RiscoRetorno;
+paintbar(clred);
+SellShortAtMarket;
+fim;
+
+fim;
+
+end;
+end.
