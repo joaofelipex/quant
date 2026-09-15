@@ -1,0 +1,158 @@
+/////////////////////////////////////
+// WINTRENDBOT V3 - EMA + MACD     //
+// stop, alvo e fechamento no fim  //
+// do dia (day trade, sem overnight)//
+/////////////////////////////////////
+
+parâmetro
+EmaRapida(9);
+EmaLenta(21);
+PontosStop(300);
+PontosAlvo(600);
+HoraFechamento(1750);
+
+var
+sEmaRapida     : Real;
+sEmaLenta      : Real;
+sPrevEmaRapida : Real;
+sPrevEmaLenta  : Real;
+mcd            : Real;
+me             : Real;
+tendeAlta      : booleano;
+tendeBaixa     : booleano;
+cenarioCompra  : booleano;
+cenarioVenda   : booleano;
+precoStop      : Real;
+precoAlvo      : Real;
+
+begin
+
+sEmaRapida :=
+  mediaexp(EmaRapida,
+    Fechamento);
+
+sEmaLenta :=
+  mediaexp(EmaLenta,
+    Fechamento);
+
+sPrevEmaRapida :=
+  sEmaRapida[1];
+
+sPrevEmaLenta :=
+  sEmaLenta[1];
+
+mcd := macd(26,12,9);
+
+me := mediaexp(9, mcd);
+
+tendeAlta :=
+  (sPrevEmaRapida <
+   sPrevEmaLenta)
+  e
+  (sEmaRapida >
+   sEmaLenta)
+  e
+  (mcd > me);
+
+tendeBaixa :=
+  (sPrevEmaRapida >
+   sPrevEmaLenta)
+  e
+  (sEmaRapida <
+   sEmaLenta)
+  e
+  (mcd < me);
+
+cenarioCompra :=
+  tendeAlta;
+
+cenarioVenda :=
+  tendeBaixa;
+
+Begin
+
+Se (BuyPosition > 0)
+e
+(Hora >=
+ HoraFechamento)
+então
+BuyToCoverAtMarket;
+
+Se (SellPosition > 0)
+e
+(Hora >=
+ HoraFechamento)
+então
+SellToCoverAtMarket;
+
+Se (BuyPosition > 0)
+e
+(Fechamento <=
+ precoStop)
+então
+BuyToCoverAtMarket;
+
+Se (BuyPosition > 0)
+e
+(Fechamento >=
+ precoAlvo)
+então
+BuyToCoverAtMarket;
+
+Se (SellPosition > 0)
+e
+(Fechamento >=
+ precoStop)
+então
+SellToCoverAtMarket;
+
+Se (SellPosition > 0)
+e
+(Fechamento <=
+ precoAlvo)
+então
+SellToCoverAtMarket;
+
+Se (Hora <
+    HoraFechamento)
+então
+
+inicio
+
+se cenarioCompra então
+
+inicio
+Se(sellposition > 0)
+então
+SellToCoverAtMarket;
+precoStop :=
+  Fechamento -
+  PontosStop;
+precoAlvo :=
+  Fechamento +
+  PontosAlvo;
+paintbar(clgreen);
+BuyAtMarket;
+fim
+
+senão se cenarioVenda
+então
+
+inicio
+Se(BuyPosition > 0)
+então
+BuyToCoverAtMarket;
+precoStop :=
+  Fechamento +
+  PontosStop;
+precoAlvo :=
+  Fechamento -
+  PontosAlvo;
+paintbar(clred);
+SellShortAtMarket;
+fim;
+
+fim;
+
+end;
+end.

@@ -1,0 +1,89 @@
+/////////////////////////////////////
+// WINTRENDBOT V1 - EMA + MACD     //
+// so entrada, sem stop ainda      //
+/////////////////////////////////////
+
+parâmetro
+EmaRapida(9);
+EmaLenta(21);
+
+var
+sEmaRapida     : Real;
+sEmaLenta      : Real;
+sPrevEmaRapida : Real;
+sPrevEmaLenta  : Real;
+mcd            : Real;
+me             : Real;
+tendeAlta      : booleano;
+tendeBaixa     : booleano;
+cenarioCompra  : booleano;
+cenarioVenda   : booleano;
+
+begin
+
+sEmaRapida :=
+  mediaexp(EmaRapida,
+    Fechamento);
+
+sEmaLenta :=
+  mediaexp(EmaLenta,
+    Fechamento);
+
+sPrevEmaRapida :=
+  sEmaRapida[1];
+
+sPrevEmaLenta :=
+  sEmaLenta[1];
+
+mcd := macd(26,12,9);
+
+me := mediaexp(9, mcd);
+
+tendeAlta :=
+  (sPrevEmaRapida <
+   sPrevEmaLenta)
+  e
+  (sEmaRapida >
+   sEmaLenta)
+  e
+  (mcd > me);
+
+tendeBaixa :=
+  (sPrevEmaRapida >
+   sPrevEmaLenta)
+  e
+  (sEmaRapida <
+   sEmaLenta)
+  e
+  (mcd < me);
+
+cenarioCompra :=
+  tendeAlta;
+
+cenarioVenda :=
+  tendeBaixa;
+
+Begin
+
+se cenarioCompra então
+
+inicio
+Se(sellposition > 0)
+então
+SellToCoverAtMarket;
+paintbar(clgreen);
+BuyAtMarket;
+fim
+
+senão se cenarioVenda
+então
+
+inicio
+Se(BuyPosition > 0)
+então
+BuyToCoverAtMarket;
+paintbar(clred);
+SellShortAtMarket;
+fim;
+end;
+end.

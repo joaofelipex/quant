@@ -1,0 +1,92 @@
+{
+  WinTrendBot — estrategia de tendencia para WIN (mini indice)
+  Logica validada em Python (backtest out-of-sample: profit factor 1.45, ver README.md)
+
+  ATENCAO antes de compilar:
+  - Confira cada nome de funcao contra o editor do Profit Pro (autocomplete / F1 / ajuda).
+    Nomes como MediaExponencial, Maior, Menor, ATR, BuyAtMarket, SetStopLoss, SetTakeProfit
+    podem ter grafia ou assinatura diferente dependendo da versao do NTSL instalada.
+  - RODE PRIMEIRO EM SIMULADOR. Nao ative em conta real sem testar.
+  - Volume de contratos abaixo esta fixo em 1. Ajuste conforme seu risco.
+}
+
+Input
+  EmaRapida(9);
+  EmaLenta(21);
+  PeriodoATR(14);
+  PeriodoDonchian(20);
+  PeriodoER(20);
+  LimiarER(0.5);
+  MultiploStopATR(1.5);
+  RiscoRetorno(2.0);
+  Contratos(1);
+
+Var
+  MediaRapida, MediaLenta       : Float;
+  CanalSuperior, CanalInferior  : Float;
+  ValorATR                      : Float;
+  MudancaLiquida, CaminhoTotal  : Float;
+  EficienciaRatio                : Float;
+  EmTendenciaAlta, EmTendenciaBaixa : Boolean;
+  RegimeTendencia                : Boolean;
+  DentroSessao                   : Boolean;
+  DistanciaStop                  : Float;
+  PrecoStop, PrecoAlvo           : Float;
+
+Begin
+  { --- indicadores --- }
+  MediaRapida := MediaExponencial(Close, EmaRapida);
+  MediaLenta  := MediaExponencial(Close, EmaLenta);
+
+  CanalSuperior := Maior(High, PeriodoDonchian)[1];
+  CanalInferior := Menor(Low, PeriodoDonchian)[1];
+
+  ValorATR := ATR(PeriodoATR);
+
+  MudancaLiquida := AbsValue(Close - Close[PeriodoER]);
+  CaminhoTotal   := Somatoria(AbsValue(Close - Close[1]), PeriodoER);
+  If CaminhoTotal > 0 Then
+    EficienciaRatio := MudancaLiquida / CaminhoTotal
+  Else
+    EficienciaRatio := 0;
+
+  { --- filtros --- }
+  EmTendenciaAlta  := MediaRapida > MediaLenta;
+  EmTendenciaBaixa := MediaRapida < MediaLenta;
+  RegimeTendencia  := EficienciaRatio >= LimiarER;
+
+  DentroSessao := (Time >= 091500) And (Time <= 174500);
+
+  { --- gestao de posicao aberta: stop e alvo por ATR --- }
+  If (PosicaoComprada) Then
+  Begin
+    SetStopLoss(PrecoStop);
+    SetTakeProfit(PrecoAlvo);
+  End;
+
+  If (PosicaoVendida) Then
+  Begin
+    SetStopLoss(PrecoStop);
+    SetTakeProfit(PrecoAlvo);
+  End;
+
+  { --- entradas --- }
+  If (PosicaoZerada) And DentroSessao And RegimeTendencia Then
+  Begin
+    DistanciaStop := ValorATR * MultiploStopATR;
+
+    If EmTendenciaAlta And (Close > CanalSuperior) Then
+    Begin
+      PrecoStop := Close - DistanciaStop;
+      PrecoAlvo := Close + DistanciaStop * RiscoRetorno;
+      BuyAtMarket(Contratos);
+    End;
+
+    If EmTendenciaBaixa And (Close < CanalInferior) Then
+    Begin
+      PrecoStop := Close + DistanciaStop;
+      PrecoAlvo := Close - DistanciaStop * RiscoRetorno;
+      SellShortAtMarket(Contratos);
+    End;
+  End;
+End.

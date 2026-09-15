@@ -1,0 +1,123 @@
+/////////////////////////////////////
+// ETH FLOW SCALPER - PowerMeter   //
+// NAO TESTADO neste editor ainda  //
+// so 1 dia validado em Python     //
+/////////////////////////////////////
+{ PowerMeter exige plano Pro/Ultra/ }
+{ modulo Scalper - confirme se sua  }
+{ conta tem acesso.                 }
+{ Janela em MINUTOS, nao em numero  }
+{ de negocios como no teste Python  }
+{ - resultado pode divergir.        }
+
+parâmetro
+JanelaMin(5);
+LimiarRatio(0.3);
+PontosStop(5);
+PontosAlvo(8);
+
+var
+volCompra     : Real;
+volVenda      : Real;
+volTotal      : Real;
+ratioFluxo    : Real;
+cenarioCompra : booleano;
+cenarioVenda  : booleano;
+precoStop     : Real;
+precoAlvo     : Real;
+
+begin
+
+volCompra :=
+  PowerMeter(osBuy,
+    JanelaMin);
+
+volVenda :=
+  PowerMeter(osSell,
+    JanelaMin);
+
+volTotal :=
+  volCompra +
+  volVenda;
+
+Se volTotal > 0
+então
+ratioFluxo :=
+  (volCompra -
+   volVenda) /
+  volTotal
+senão
+ratioFluxo := 0;
+
+cenarioCompra :=
+  ratioFluxo >=
+  LimiarRatio;
+
+cenarioVenda :=
+  ratioFluxo <=
+  -LimiarRatio;
+
+Begin
+
+Se (BuyPosition > 0)
+e
+(Fechamento <=
+ precoStop)
+então
+BuyToCoverAtMarket;
+
+Se (BuyPosition > 0)
+e
+(Fechamento >=
+ precoAlvo)
+então
+BuyToCoverAtMarket;
+
+Se (SellPosition > 0)
+e
+(Fechamento >=
+ precoStop)
+então
+SellToCoverAtMarket;
+
+Se (SellPosition > 0)
+e
+(Fechamento <=
+ precoAlvo)
+então
+SellToCoverAtMarket;
+
+se cenarioCompra então
+
+inicio
+Se(sellposition > 0)
+então
+SellToCoverAtMarket;
+precoStop :=
+  Fechamento -
+  PontosStop;
+precoAlvo :=
+  Fechamento +
+  PontosAlvo;
+paintbar(clgreen);
+BuyAtMarket;
+fim
+
+senão se cenarioVenda
+então
+
+inicio
+Se(BuyPosition > 0)
+então
+BuyToCoverAtMarket;
+precoStop :=
+  Fechamento +
+  PontosStop;
+precoAlvo :=
+  Fechamento -
+  PontosAlvo;
+paintbar(clred);
+SellShortAtMarket;
+fim;
+end;
+end.
