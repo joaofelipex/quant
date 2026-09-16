@@ -1,0 +1,239 @@
+/////////////////////////////////////
+// WINTRENDBOT V7 - M1 escalado x5  //
+// EMA + Donchian + ATR + regime ER //
+// periodos multiplicados por 5 pra //
+// preservar a mesma janela real de //
+// tempo validada em 5min no Python //
+/////////////////////////////////////
+{ Base: V6 (sem piramide). NAO TESTADO com esses periodos }
+{ especificos - so a versao 5min (padrao) foi validada.   }
+
+parâmetro
+EmaRapida(45);
+EmaLenta(105);
+PerDonchian(100);
+PerATR(70);
+PerER(100);
+LimiarER(0.5);
+MultStopATR(1.5);
+RiscoRetorno(2.0);
+HoraFecha(1750);
+MaxBarras(300);
+
+var
+sEmaRapida    : Real;
+sEmaLenta     : Real;
+canalSup      : Real;
+canalInf      : Real;
+trueRange     : Real;
+valorATR      : Real;
+variacaoAbs   : Real;
+mudanca       : Real;
+caminho       : Real;
+er            : Real;
+tendeAlta     : booleano;
+tendeBaixa    : booleano;
+regimeOk      : booleano;
+cenarioCompra : booleano;
+cenarioVenda  : booleano;
+posicaoZerada : booleano;
+distStop      : Real;
+precoStop     : Real;
+precoAlvo     : Real;
+barsAberto    : Real;
+
+begin
+
+sEmaRapida :=
+  mediaexp(EmaRapida,
+    Fechamento);
+
+sEmaLenta :=
+  mediaexp(EmaLenta,
+    Fechamento);
+
+canalSup :=
+  Highest(Maxima,
+    PerDonchian);
+
+canalInf :=
+  Lowest(Minima,
+    PerDonchian);
+
+trueRange :=
+  TrueHigh() -
+  TrueLow();
+
+valorATR :=
+  mediaexp(PerATR,
+    trueRange);
+
+variacaoAbs :=
+  ABS(Fechamento -
+    Fechamento[1]);
+
+mudanca :=
+  ABS(Fechamento -
+    Fechamento[PerER]);
+
+caminho :=
+  Summation(
+    variacaoAbs,
+    PerER);
+
+Se caminho > 0
+então
+er :=
+  mudanca /
+  caminho
+senão
+er := 0;
+
+tendeAlta :=
+  sEmaRapida >
+  sEmaLenta;
+
+tendeBaixa :=
+  sEmaRapida <
+  sEmaLenta;
+
+regimeOk :=
+  er >= LimiarER;
+
+cenarioCompra :=
+  (regimeOk)
+  e
+  (tendeAlta)
+  e
+  (Fechamento >
+   canalSup[1]);
+
+cenarioVenda :=
+  (regimeOk)
+  e
+  (tendeBaixa)
+  e
+  (Fechamento <
+   canalInf[1]);
+
+Begin
+
+Se (BuyPosition > 0)
+e
+(Time >=
+ HoraFecha)
+então
+BuyToCoverAtMarket;
+
+Se (SellPosition > 0)
+e
+(Time >=
+ HoraFecha)
+então
+SellToCoverAtMarket;
+
+Se (BuyPosition > 0)
+e
+(barsAberto >=
+ MaxBarras)
+então
+BuyToCoverAtMarket;
+
+Se (SellPosition > 0)
+e
+(barsAberto >=
+ MaxBarras)
+então
+SellToCoverAtMarket;
+
+Se (BuyPosition > 0)
+e
+(Fechamento <=
+ precoStop)
+então
+BuyToCoverAtMarket;
+
+Se (BuyPosition > 0)
+e
+(Fechamento >=
+ precoAlvo)
+então
+BuyToCoverAtMarket;
+
+Se (SellPosition > 0)
+e
+(Fechamento >=
+ precoStop)
+então
+SellToCoverAtMarket;
+
+Se (SellPosition > 0)
+e
+(Fechamento <=
+ precoAlvo)
+então
+SellToCoverAtMarket;
+
+Se (BuyPosition > 0)
+ou
+(SellPosition > 0)
+então
+barsAberto :=
+  barsAberto + 1
+senão
+barsAberto := 0;
+
+posicaoZerada :=
+  (BuyPosition = 0)
+  e
+  (SellPosition = 0);
+
+Se (posicaoZerada)
+e
+(Time <
+    HoraFecha)
+então
+
+inicio
+
+se cenarioCompra então
+
+inicio
+distStop :=
+  valorATR *
+  MultStopATR;
+precoStop :=
+  Fechamento -
+  distStop;
+precoAlvo :=
+  Fechamento +
+  distStop *
+  RiscoRetorno;
+barsAberto := 0;
+paintbar(clgreen);
+BuyAtMarket;
+fim
+
+senão se cenarioVenda
+então
+
+inicio
+distStop :=
+  valorATR *
+  MultStopATR;
+precoStop :=
+  Fechamento +
+  distStop;
+precoAlvo :=
+  Fechamento -
+  distStop *
+  RiscoRetorno;
+barsAberto := 0;
+paintbar(clred);
+SellShortAtMarket;
+fim;
+
+fim;
+
+end;
+end.
