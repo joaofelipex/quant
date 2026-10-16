@@ -20,3 +20,6 @@ Desktop.ini
 .env
 .env.*
 *.token
+
+# Dados baixados (reproduziveis pelos scripts em dados/)
+dados/raw/
