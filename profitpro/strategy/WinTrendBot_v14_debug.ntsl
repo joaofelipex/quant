@@ -1,0 +1,154 @@
+/////////////////////////////////////
+// WINTRENDBOT V14 - v13 CORRIGIDA   //
+// + PLOTS DE DEBUG                  //
+/////////////////////////////////////
+{ Correcoes em relacao a v13 (que nao entrou em nenhuma operacao): }
+{ - Date[1] removido: Date e uma FUNCAO, nao serie. Agora a data }
+{   anterior e guardada na variavel dataAnt.                      }
+{ - contadores inicializados no primeiro candle (dataAnt = 0).   }
+{ - entradas usam BuyPosition/SellPosition (como nas versoes que }
+{   voce ja usava) em vez de HasPosition.                         }
+{ - Plots no fim: olhe no grafico qual condicao nunca fica OK.   }
+{ Depois de achar o problema, apague os Plot().                   }
+
+parâmetro
+EmaRapida(9);
+EmaLenta(21);
+PontosStop(300);
+PontosAlvo(600);
+FolgaStop(50);
+FiltroRapida(27);
+FiltroLenta(63);
+HoraIni(915);
+HoraFecha(1750);
+MaxOpsDia(3);
+PerdaMaxDia(150);
+
+var
+sEmaRapida     : Real;
+sEmaLenta      : Real;
+sPrevEmaRapida : Real;
+sPrevEmaLenta  : Real;
+mcd            : Real;
+me             : Real;
+fRapida        : Real;
+fLenta         : Real;
+tendeAlta      : booleano;
+tendeBaixa     : booleano;
+cenarioCompra  : booleano;
+cenarioVenda   : booleano;
+posicaoZerada  : booleano;
+nOps           : Real;
+dataAnt        : Real;
+resultadoDia   : Real;
+diaBloqueado   : booleano;
+precoStop      : Real;
+precoAlvo      : Real;
+
+begin
+
+sEmaRapida := mediaexp(EmaRapida, Fechamento);
+sEmaLenta  := mediaexp(EmaLenta, Fechamento);
+sPrevEmaRapida := sEmaRapida[1];
+sPrevEmaLenta  := sEmaLenta[1];
+
+mcd := macd(26,12,9);
+me  := mediaexp(9, mcd);
+
+fRapida := mediaexp(FiltroRapida, Fechamento);
+fLenta  := mediaexp(FiltroLenta, Fechamento);
+
+tendeAlta :=
+  (sPrevEmaRapida < sPrevEmaLenta)
+  e (sEmaRapida > sEmaLenta)
+  e (mcd > me);
+
+tendeBaixa :=
+  (sPrevEmaRapida > sPrevEmaLenta)
+  e (sEmaRapida < sEmaLenta)
+  e (mcd < me);
+
+cenarioCompra := tendeAlta e (fRapida > fLenta);
+cenarioVenda  := tendeBaixa e (fRapida < fLenta);
+
+posicaoZerada :=
+  (BuyPosition = 0)
+  e (SellPosition = 0);
+
+{ novo dia: zera contadores }
+Se (Date <> dataAnt)
+então
+inicio
+nOps := 0;
+diaBloqueado := falso;
+dataAnt := Date;
+fim;
+
+{ limite de perda diaria (fechado + aberto, em R$) }
+resultadoDia := DailyResult(verdadeiro);
+Se (resultadoDia <= -PerdaMaxDia)
+então
+diaBloqueado := verdadeiro;
+
+{ ---------- SAIDAS ---------- }
+Se (BuyPosition > 0)
+então
+inicio
+  Se (Time >= HoraFecha) ou (diaBloqueado)
+  então
+    SellToCoverAtMarket
+  senão
+  inicio
+    precoStop := BuyPrice - PontosStop;
+    precoAlvo := BuyPrice + PontosAlvo;
+    SellToCoverStop(precoStop, precoStop - FolgaStop);
+    SellToCoverLimit(precoAlvo);
+  fim;
+fim;
+
+Se (SellPosition > 0)
+então
+inicio
+  Se (Time >= HoraFecha) ou (diaBloqueado)
+  então
+    BuyToCoverAtMarket
+  senão
+  inicio
+    precoStop := SellPrice + PontosStop;
+    precoAlvo := SellPrice - PontosAlvo;
+    BuyToCoverStop(precoStop, precoStop + FolgaStop);
+    BuyToCoverLimit(precoAlvo);
+  fim;
+fim;
+
+{ ---------- ENTRADAS ---------- }
+Se (posicaoZerada)
+e (diaBloqueado = falso)
+e (nOps < MaxOpsDia)
+e (Time >= HoraIni)
+e (Time < HoraFecha)
+então
+inicio
+  se cenarioCompra então
+  inicio
+    paintbar(clgreen);
+    nOps := nOps + 1;
+    BuyAtMarket;
+  fim
+  senão se cenarioVenda então
+  inicio
+    paintbar(clred);
+    nOps := nOps + 1;
+    SellShortAtMarket;
+  fim;
+fim;
+
+{ ---------- DEBUG: remova depois ---------- }
+Plot(sEmaRapida - sEmaLenta);
+Plot(mcd - me);
+Plot(fRapida - fLenta);
+Plot(nOps);
+Plot(resultadoDia);
+Plot(Time);
+
+end.
