@@ -24,10 +24,10 @@ Cada nota segue o mesmo molde: **o que é → fórmula → como usar → dado ne
 
 | Segmento | Fonte candidata (gratuita) | Status |
 |---|---|---|
-| Cripto | data.binance.vision | pendente |
+| Cripto | data.binance.vision | `dados/fetch_binance.py` pronto |
 | Forex/índices | Dukascopy, HistData | pendente |
 | Ações / ETFs | Yahoo (`yfinance`), Stooq | pendente |
-| Macro | FRED; no Brasil, SGS do Banco Central | pendente |
+| Macro | SGS do Banco Central (FRED para EUA) | `dados/fetch_bcb.py` pronto (FRED pendente) |
 | Renda fixa BR | Tesouro Transparente, ANBIMA (curvas) | pendente |
 | Futuros B3 (WIN/WDO/DI) | Profit/MT5 (exportação própria) | pendente |
 
