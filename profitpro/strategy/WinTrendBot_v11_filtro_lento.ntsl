@@ -1,0 +1,145 @@
+/////////////////////////////////////
+// WINTRENDBOT V11 - EMA+MACD       //
+// + filtro tendencia lenta (~15m)  //
+// + saidas corrigidas + fecha dia  //
+/////////////////////////////////////
+{ ATENCAO: edge NAO comprovado (PF ~1,2 em 54 trades, WIN 5min). }
+{ Testar em SIMULADOR antes de usar em conta real.             }
+{ Para 1min multiplique EmaRapida/EmaLenta/Filtro por 5 (NAO TESTADO). }
+{ BUG CORRIGIDO: a versao original comprava/vendia de novo }
+{ toda vez que cenarioCompra/cenarioVenda ficava verdadeiro,}
+{ mesmo ja estando posicionado no mesmo lado - a posicao    }
+{ ia crescendo sem parar. Agora so entra se PosicaoZerada.  }
+
+parâmetro
+EmaRapida(9);
+EmaLenta(21);
+PontosStop(300);
+PontosAlvo(600);
+FiltroRapida(27);
+FiltroLenta(63);
+HoraIni(915);
+HoraFecha(1750);
+
+var
+sEmaRapida     : Real;
+sEmaLenta      : Real;
+sPrevEmaRapida : Real;
+sPrevEmaLenta  : Real;
+mcd            : Real;
+me             : Real;
+tendeAlta      : booleano;
+tendeBaixa     : booleano;
+cenarioCompra  : booleano;
+cenarioVenda   : booleano;
+posicaoZerada  : booleano;
+precoStop      : Real;
+precoAlvo      : Real;
+fRapida        : Real;
+fLenta         : Real;
+
+begin
+
+sEmaRapida :=
+  mediaexp(EmaRapida,
+    Fechamento);
+
+sEmaLenta :=
+  mediaexp(EmaLenta,
+    Fechamento);
+
+sPrevEmaRapida :=
+  sEmaRapida[1];
+
+sPrevEmaLenta :=
+  sEmaLenta[1];
+
+mcd := macd(26,12,9);
+
+me := mediaexp(9, mcd);
+
+tendeAlta :=
+  (sPrevEmaRapida <
+   sPrevEmaLenta)
+  e
+  (sEmaRapida >
+   sEmaLenta)
+  e
+  (mcd > me);
+
+tendeBaixa :=
+  (sPrevEmaRapida >
+   sPrevEmaLenta)
+  e
+  (sEmaRapida <
+   sEmaLenta)
+  e
+  (mcd < me);
+
+fRapida := mediaexp(FiltroRapida, Fechamento);
+fLenta  := mediaexp(FiltroLenta, Fechamento);
+
+cenarioCompra :=
+  tendeAlta
+  e (fRapida > fLenta);
+
+cenarioVenda :=
+  tendeBaixa
+  e (fRapida < fLenta);
+
+posicaoZerada :=
+  (BuyPosition = 0)
+  e
+  (SellPosition = 0);
+
+Begin
+
+{ COMPRADO fecha com SellToCover; VENDIDO fecha com BuyToCover }
+Se (BuyPosition > 0)
+e
+((Fechamento <= precoStop)
+ ou (Fechamento >= precoAlvo)
+ ou (Time >= HoraFecha))
+então
+SellToCoverAtMarket;
+
+Se (SellPosition > 0)
+e
+((Fechamento >= precoStop)
+ ou (Fechamento <= precoAlvo)
+ ou (Time >= HoraFecha))
+então
+BuyToCoverAtMarket;
+
+Se (posicaoZerada)
+e
+(Time >= HoraIni)
+e
+(Time < HoraFecha)
+então
+
+inicio
+
+se cenarioCompra então
+
+inicio
+precoStop := Fechamento - PontosStop;
+precoAlvo := Fechamento + PontosAlvo;
+paintbar(clgreen);
+BuyAtMarket;
+fim
+
+senão se cenarioVenda
+então
+
+inicio
+precoStop := Fechamento + PontosStop;
+precoAlvo := Fechamento - PontosAlvo;
+paintbar(clred);
+SellShortAtMarket;
+fim;
+
+fim;
+
+end;
+end.

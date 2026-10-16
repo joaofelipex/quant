@@ -1,0 +1,146 @@
+/////////////////////////////////////
+// WINTRENDBOT V13 - EMA+MACD       //
+// stop e alvo como ordens no book  //
+// (OCO) + limite de perda diario   //
+/////////////////////////////////////
+{ ATENCAO: edge NAO comprovado (PF ~1,2 em 54 trades, WIN 5min). }
+{ Testar em SIMULADOR antes de usar em conta real.             }
+{ Para 1min multiplique EmaRapida/EmaLenta/Filtro por 5 (NAO TESTADO). }
+{                                                              }
+{ O QUE MUDOU EM RELACAO A V12:                                }
+{ - Stop e alvo sao ordens de verdade no book (SellToCoverStop }
+{   + SellToCoverLimit, ou BuyToCover*), reenviadas a cada     }
+{   candle. O Profit trata ToCover como OCO: executou uma      }
+{   perna, a outra e cancelada. Antes o stop so era checado no }
+{   FECHAMENTO do candle e a perda podia passar muito do stop. }
+{ - Precos de stop/alvo calculados a partir do preco real de   }
+{   entrada (BuyPrice/SellPrice), nao do fechamento do sinal.  }
+{ - Limite de perda diaria em R$ via DailyResult: atingiu,     }
+{   zera e nao opera mais no dia.                              }
+
+parâmetro
+EmaRapida(9);
+EmaLenta(21);
+PontosStop(300);
+PontosAlvo(600);
+FolgaStop(50);
+FiltroRapida(27);
+FiltroLenta(63);
+HoraIni(915);
+HoraFecha(1750);
+MaxOpsDia(3);
+PerdaMaxDia(150);
+
+var
+sEmaRapida     : Real;
+sEmaLenta      : Real;
+sPrevEmaRapida : Real;
+sPrevEmaLenta  : Real;
+mcd            : Real;
+me             : Real;
+fRapida        : Real;
+fLenta         : Real;
+tendeAlta      : booleano;
+tendeBaixa     : booleano;
+cenarioCompra  : booleano;
+cenarioVenda   : booleano;
+nOps           : Real;
+resultadoDia   : Real;
+diaBloqueado   : booleano;
+precoStop      : Real;
+precoAlvo      : Real;
+
+begin
+
+sEmaRapida := mediaexp(EmaRapida, Fechamento);
+sEmaLenta  := mediaexp(EmaLenta, Fechamento);
+sPrevEmaRapida := sEmaRapida[1];
+sPrevEmaLenta  := sEmaLenta[1];
+
+mcd := macd(26,12,9);
+me  := mediaexp(9, mcd);
+
+fRapida := mediaexp(FiltroRapida, Fechamento);
+fLenta  := mediaexp(FiltroLenta, Fechamento);
+
+tendeAlta :=
+  (sPrevEmaRapida < sPrevEmaLenta)
+  e (sEmaRapida > sEmaLenta)
+  e (mcd > me);
+
+tendeBaixa :=
+  (sPrevEmaRapida > sPrevEmaLenta)
+  e (sEmaRapida < sEmaLenta)
+  e (mcd < me);
+
+cenarioCompra := tendeAlta e (fRapida > fLenta);
+cenarioVenda  := tendeBaixa e (fRapida < fLenta);
+
+{ zera contadores no primeiro candle de cada dia }
+Se (Date <> Date[1])
+então
+inicio
+nOps := 0;
+diaBloqueado := falso;
+fim;
+
+{ limite de perda diaria (fechado + aberto, em R$) }
+resultadoDia := DailyResult(verdadeiro);
+Se (resultadoDia <= -PerdaMaxDia)
+então
+diaBloqueado := verdadeiro;
+
+{ ---------- SAIDAS ---------- }
+Se (IsBought)
+então
+inicio
+  Se (Time >= HoraFecha) ou (diaBloqueado)
+  então
+    SellToCoverAtMarket
+  senão
+  inicio
+    precoStop := BuyPrice - PontosStop;
+    precoAlvo := BuyPrice + PontosAlvo;
+    { stop com limite FolgaStop abaixo, alvo limitado: OCO }
+    SellToCoverStop(precoStop, precoStop - FolgaStop);
+    SellToCoverLimit(precoAlvo);
+  fim;
+fim
+senão se (IsSold)
+então
+inicio
+  Se (Time >= HoraFecha) ou (diaBloqueado)
+  então
+    BuyToCoverAtMarket
+  senão
+  inicio
+    precoStop := SellPrice + PontosStop;
+    precoAlvo := SellPrice - PontosAlvo;
+    BuyToCoverStop(precoStop, precoStop + FolgaStop);
+    BuyToCoverLimit(precoAlvo);
+  fim;
+fim
+
+{ ---------- ENTRADAS ---------- }
+senão se (not HasPosition)
+e (not diaBloqueado)
+e (nOps < MaxOpsDia)
+e (Time >= HoraIni)
+e (Time < HoraFecha)
+então
+inicio
+  se cenarioCompra então
+  inicio
+    paintbar(clgreen);
+    nOps := nOps + 1;
+    BuyAtMarket;
+  fim
+  senão se cenarioVenda então
+  inicio
+    paintbar(clred);
+    nOps := nOps + 1;
+    SellShortAtMarket;
+  fim;
+fim;
+
+end.
