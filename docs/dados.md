@@ -5,8 +5,8 @@ Precisam apenas de `pandas` e da biblioteca padrao do Python.
 
 | Script | Fonte | Exemplo |
 |---|---|---|
-| `fetch_binance.py` | data.binance.vision (spot, klines mensais) | `python dados/fetch_binance.py BTCUSDT 1m 2023-01 2024-12` |
-| `fetch_bcb.py` | SGS do Banco Central | `python dados/fetch_bcb.py` (catalogo: Selic, CDI, IPCA, IGP-M, dolar, desemprego) |
+| `src/quant/data/fetch_binance.py` | data.binance.vision (spot, klines mensais) | `python -m quant.data.fetch_binance BTCUSDT 1m 2023-01 2024-12` |
+| `src/quant/data/fetch_bcb.py` | SGS do Banco Central | `python -m quant.data.fetch_bcb` (catalogo: Selic, CDI, IPCA, IGP-M, dolar, desemprego) |
 
 Pendentes: Dukascopy (forex/indices), Yahoo/Stooq (acoes), FRED (macro EUA), curvas ANBIMA/Tesouro.
 

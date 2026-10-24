@@ -1,6 +1,6 @@
 # WIN Trend Bot — Profit Pro
 
-Bot de tendência para o mini índice (WIN), com filtro de regime para evitar operar em lateralização. Projeto separado do QuantSage (MT5/Clear) — este mira execução via Profit Pro (Nelogica).
+Bot de tendência para o mini índice (WIN), com filtro de regime para evitar operar em lateralização. Estudo de pesquisa; a execução via Profit Pro (NTSL) está em `execucao/profitpro/`.
 
 ## Estratégia
 
@@ -12,7 +12,7 @@ Bot de tendência para o mini índice (WIN), com filtro de regime para evitar op
 6. **Sessão** — só opera entre 09:15 e 17:45 (evita abertura e fechamento, mais ruidosos).
 7. **Custos considerados** — 1 tick (5 pontos) de slippage por lado + R$1,20 de emolumentos por round-trip. Ponto do WIN = R$0,20/contrato.
 
-Código: `strategy/trend_follow.py` (indicadores e sinais) + `backtest/engine.py` (motor de simulação).
+Código: `src/quant/strategies/trend_follow.py` (indicadores e sinais) + `src/quant/backtest/engine.py` (motor de simulação).
 
 ## Por que o filtro de regime existe
 
@@ -89,7 +89,7 @@ O Profit Pro tem editor de automação nativo (NTSL), sem necessidade de ProfitD
 
 Como as funções de canal (Donchian) e ATR não foram localizadas, a versão em produção no Profit **não é** a estratégia validada em Python (EMA+Donchian+ER). É uma versão simplificada:
 
-**`strategy/WinTrendBot_v2_com_stop.ntsl`** — EMA(9/21) + MACD(12,26,9) como confirmação de tendência, stop/alvo em pontos fixos (não ATR).
+**`execucao/profitpro/WinTrendBot_v2_com_stop.ntsl`** — EMA(9/21) + MACD(12,26,9) como confirmação de tendência, stop/alvo em pontos fixos (não ATR).
 
 Essa versão foi validada separadamente em Python (mesmo motor de backtest, replicando a lógica exata):
 
@@ -112,9 +112,9 @@ Essa versão foi validada separadamente em Python (mesmo motor de backtest, repl
 Nota: essa instalação Python resolve `site-packages` relativo ao diretório atual, não ao local fixo da instalação. É preciso apontar `PYTHONPATH` explicitamente:
 
 ```bash
-cd quant/profitpro
-PYTHONPATH="/c/Users/Infraestrutura-IMTS/Lib/site-packages" /c/Python313/python.exe backtest/run_backtest.py
-PYTHONPATH="/c/Users/Infraestrutura-IMTS/Lib/site-packages" /c/Python313/python.exe backtest/monthly_report.py
+cd estudos/win_trend
+PYTHONPATH="/c/Users/Infraestrutura-IMTS/Lib/site-packages" /c/Python313/python.exe run_backtest.py
+PYTHONPATH="/c/Users/Infraestrutura-IMTS/Lib/site-packages" /c/Python313/python.exe monthly_report.py
 ```
 
 Saídas em `reports/`: `trades.csv`, `equity_curve.png`, `monthly_pnl.png`.

@@ -1,8 +1,11 @@
-"""Motor de backtest simples: uma posicao por vez, stop/alvo em multiplos de ATR."""
+"""Motor de backtest simples: uma posicao por vez, stop/alvo em multiplos de ATR.
+
+Agnostico de ativo: o contrato vem de `quant.instruments.Instrument` (default WIN).
+"""
 import pandas as pd
 
-POINT_VALUE = 0.20  # R$ por ponto, 1 contrato de WIN
-TICK_POINTS = 5  # 1 tick de WIN = 5 pontos
+from quant.instruments import Instrument, WIN
+from quant.metrics import trade_metrics
 
 
 def run_backtest(
@@ -11,7 +14,8 @@ def run_backtest(
     risk_reward=2.0,
     contracts=1,
     slippage_ticks=1,
-    fee_brl_round_trip=1.20,
+    instrument: Instrument = WIN,
+    fee_scale=1.0,
 ) -> tuple[pd.DataFrame, dict]:
     trades = []
     position = None  # dict: side, entry_price, stop, target, entry_time
@@ -32,12 +36,12 @@ def run_backtest(
                 exit_price, reason = position["target"], "target"
 
             if exit_price is not None:
-                slippage_points = slippage_ticks * TICK_POINTS
+                slippage_points = slippage_ticks * instrument.tick_size
                 # slippage joga contra a posicao tanto na entrada quanto na saida
                 effective_entry = position["entry_price"] + slippage_points * side
                 effective_exit = exit_price - slippage_points * side
                 pnl_points = (effective_exit - effective_entry) * side
-                pnl_brl = pnl_points * POINT_VALUE * contracts - fee_brl_round_trip * contracts
+                pnl_brl = pnl_points * instrument.point_value * contracts - instrument.fee_round_trip * fee_scale * contracts
                 trades.append({
                     "entry_time": position["entry_time"],
                     "exit_time": row["datetime"],
@@ -72,24 +76,17 @@ def run_backtest(
 
 
 def compute_metrics(trades_df: pd.DataFrame) -> dict:
+    """Metricas legadas (chaves *_brl) sobre trade_metrics, para manter os relatorios existentes."""
     if trades_df.empty:
         return {"n_trades": 0}
-
-    wins = trades_df[trades_df["pnl_brl"] > 0]
-    losses = trades_df[trades_df["pnl_brl"] <= 0]
-    equity = trades_df["pnl_brl"].cumsum()
-    running_max = equity.cummax()
-    drawdown = equity - running_max
-
-    gross_win = wins["pnl_brl"].sum()
-    gross_loss = losses["pnl_brl"].sum()
-
+    m = trade_metrics(trades_df["pnl_brl"])
     return {
-        "n_trades": len(trades_df),
-        "win_rate": len(wins) / len(trades_df),
-        "gross_pnl_brl": trades_df["pnl_brl"].sum(),
-        "avg_win_brl": wins["pnl_brl"].mean() if len(wins) else 0.0,
-        "avg_loss_brl": losses["pnl_brl"].mean() if len(losses) else 0.0,
-        "profit_factor": (gross_win / abs(gross_loss)) if gross_loss != 0 else float("inf"),
-        "max_drawdown_brl": drawdown.min(),
+        "n_trades": m["n_trades"],
+        "win_rate": m["win_rate"],
+        "gross_pnl_brl": m["total_pnl"],
+        "avg_win_brl": m["avg_win"],
+        "avg_loss_brl": m["avg_loss"],
+        "profit_factor": m["profit_factor"],
+        "max_drawdown_brl": m["max_drawdown"],
+        "t_stat": m["t_stat"],
     }

@@ -106,7 +106,8 @@ def compute_metrics(trades_df: pd.DataFrame) -> dict:
 if __name__ == "__main__":
     from pathlib import Path
 
-    data_path = Path(__file__).resolve().parents[1] / "data" / "eth_times_trades.csv"
+    study = Path(__file__).resolve().parents[3] / "estudos" / "eth_flow"
+    data_path = study / "eth_times_trades.csv"
     df = load_times_trades(str(data_path))
     trades_df, metrics = backtest_flow_scalper(df)
 
@@ -116,7 +117,7 @@ if __name__ == "__main__":
     for k, v in metrics.items():
         print(f"{k}: {v}")
 
-    out_path = Path(__file__).resolve().parents[1] / "reports" / "eth_flow_trades.csv"
+    out_path = study / "eth_flow_trades.csv"
     trades_df.to_csv(out_path, index=False)
     print(f"\nTrades salvos em {out_path}")
     print("\nLEMBRETE: 1 dia de dado nao valida edge. Nao rodar em conta real/simulada ainda.")

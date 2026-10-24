@@ -23,3 +23,6 @@ Desktop.ini
 
 # Dados baixados (reproduziveis pelos scripts em dados/)
 dados/raw/
+
+# Packaging
+*.egg-info/
