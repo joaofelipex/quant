@@ -1,8 +1,8 @@
 """Baixa klines mensais da Binance (data.binance.vision) e grava um CSV por simbolo.
 
 Uso:
-    python dados/fetch_binance.py BTCUSDT 1m 2023-01 2024-12
-    python dados/fetch_binance.py ETHUSDT 5m 2024-01        # so um mes
+    python -m quant.data.fetch_binance BTCUSDT 1m 2023-01 2024-12
+    python -m quant.data.fetch_binance ETHUSDT 5m 2024-01        # so um mes
 Saida: dados/raw/binance/<SIMBOLO>_<intervalo>.csv (datetime UTC, OHLCV, trades, taker_buy_base)
 """
 import io
@@ -15,7 +15,7 @@ from pathlib import Path
 import pandas as pd
 
 BASE = "https://data.binance.vision/data/spot/monthly/klines"
-OUT_DIR = Path(__file__).resolve().parent / "raw" / "binance"
+OUT_DIR = Path(__file__).resolve().parents[3] / "dados" / "raw" / "binance"
 COLS = [
     "open_time", "open", "high", "low", "close", "volume", "close_time",
     "quote_volume", "trades", "taker_buy_base", "taker_buy_quote", "ignore",

@@ -1,8 +1,8 @@
 """Baixa series do SGS do Banco Central (api.bcb.gov.br) para CSV.
 
 Uso:
-    python dados/fetch_bcb.py            # baixa todas as series do catalogo abaixo
-    python dados/fetch_bcb.py selic_meta # so uma
+    python -m quant.data.fetch_bcb            # baixa todas as series do catalogo abaixo
+    python -m quant.data.fetch_bcb selic_meta # so uma
 Saida: dados/raw/bcb/<nome>.csv (data, valor)
 
 A API limita series diarias a janelas menores que 10 anos por consulta, por isso baixamos em blocos.
@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pandas as pd
 
-OUT_DIR = Path(__file__).resolve().parent / "raw" / "bcb"
+OUT_DIR = Path(__file__).resolve().parents[3] / "dados" / "raw" / "bcb"
 
 # nome -> (codigo SGS, descricao, inicio)
 CATALOGO = {

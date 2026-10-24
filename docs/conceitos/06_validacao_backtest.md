@@ -17,7 +17,7 @@ Objetivo: separar edge real de sorte e de ajuste ao passado.
 - Look-ahead: usar informação que não existia (indicador com candle ainda aberto, preço ajustado futuro).
 - Survivorship: universo só com ativos que sobreviveram.
 - Data snooping / múltiplos testes: ao testar `N` variações, o melhor resultado tende a ser sorte. Ajuste o limiar de significância (Bonferroni) ou use *Deflated Sharpe Ratio*.
-- Overfitting: parâmetros "ótimos" no treino que somem no teste (já ocorreu no `profitpro` com R:R 1:2,5).
+- Overfitting: parâmetros "ótimos" no treino que somem no teste (já ocorreu no estudo `win_trend` com R:R 1:2,5).
 - Execução irreal: ordens a mercado no fechamento, sem slippage, sem spread.
 
 ## Robustez

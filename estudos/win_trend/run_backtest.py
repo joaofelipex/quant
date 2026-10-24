@@ -1,17 +1,15 @@
-import sys
 from pathlib import Path
 
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-sys.path.append(str(Path(__file__).resolve().parents[1]))
+from quant.strategies.trend_follow import load_win_csv, add_indicators, generate_signals
+from quant.backtest.engine import run_backtest
 
-from strategy.trend_follow import load_win_csv, add_indicators, generate_signals
-from backtest.engine import run_backtest
-
-DATA_PATH = Path(__file__).resolve().parents[1] / "data" / "win_5min_raw.csv"
-REPORTS_DIR = Path(__file__).resolve().parents[1] / "reports"
+HERE = Path(__file__).resolve().parent
+DATA_PATH = HERE / "data" / "win_5min_raw.csv"
+REPORTS_DIR = HERE / "reports"
 
 
 def plot_equity_curve(trades_df, out_path):
@@ -43,7 +41,7 @@ def main():
 
     trades_df, metrics = run_backtest(
         df, atr_stop_mult=1.5, risk_reward=2.0, contracts=1,
-        slippage_ticks=1, fee_brl_round_trip=1.20,
+        slippage_ticks=1,
     )
 
     print(f"Periodo: {df['datetime'].min()} a {df['datetime'].max()}")
