@@ -1,0 +1,189 @@
+{
+  "win_prev": {
+    "bars": 6868,
+    "days": 62,
+    "from": "2026-06-17 09:00:00",
+    "to": "2026-09-11 18:20:00",
+    "metrics": {
+      "n_trades": 84,
+      "win_rate": 0.4643,
+      "gross_pnl_brl": 1027.6172,
+      "avg_win_brl": 122.2365,
+      "avg_loss_brl": -83.1024,
+      "profit_factor": 1.2748,
+      "max_drawdown_brl": -756.992,
+      "t_stat": 0.9206
+    },
+    "legacy_entry_at_signal_close": {
+      "n_trades": 85,
+      "win_rate": 0.4471,
+      "gross_pnl_brl": 1233.5711,
+      "avg_win_brl": 129.5084,
+      "avg_loss_brl": -78.4628,
+      "profit_factor": 1.3345,
+      "max_drawdown_brl": -752.9873,
+      "t_stat": 1.0922
+    },
+    "bootstrap": {
+      "pnl_p5": -827.364,
+      "pnl_p50": 1023.1418,
+      "pnl_p95": 2914.4489,
+      "prob_loss": 0.1856,
+      "dd_p50": -798.7041,
+      "dd_p95": -1635.4954
+    },
+    "dsr": {
+      "1": 0.8281,
+      "20": 0.154,
+      "100": 0.0474
+    },
+    "stress_costs": [
+      {
+        "custo_x": 1.0,
+        "gross_pnl_brl": 1027.6172,
+        "profit_factor": 1.2748
+      },
+      {
+        "custo_x": 2.0,
+        "gross_pnl_brl": 785.8172,
+        "profit_factor": 1.2023
+      },
+      {
+        "custo_x": 3.0,
+        "gross_pnl_brl": 544.0172,
+        "profit_factor": 1.1351
+      }
+    ],
+    "reasons": {
+      "stop": 40,
+      "target": 27,
+      "eod": 17
+    },
+    "monthly_pnl": {
+      "2026-06": 146.24,
+      "2026-07": 340.05,
+      "2026-08": 596.43,
+      "2026-09": -55.11
+    },
+    "train_test": {
+      "train": {
+        "n_trades": 37,
+        "win_rate": 0.5135,
+        "gross_pnl_brl": 486.2926,
+        "avg_win_brl": 110.6179,
+        "avg_loss_brl": -89.7471,
+        "profit_factor": 1.301,
+        "max_drawdown_brl": -756.992,
+        "t_stat": 0.6631
+      },
+      "test": {
+        "n_trades": 47,
+        "win_rate": 0.4255,
+        "gross_pnl_brl": 541.3246,
+        "avg_win_brl": 133.2742,
+        "avg_loss_brl": -78.6726,
+        "profit_factor": 1.2548,
+        "max_drawdown_brl": -533.6112,
+        "t_stat": 0.6366
+      },
+      "split": "2026-08-01"
+    },
+    "description": "WIN contrato anterior, 15/04-14/09"
+  },
+  "win_z26": {
+    "bars": 5223,
+    "days": 47,
+    "from": "2026-08-06 09:00:00",
+    "to": "2026-10-15 18:20:00",
+    "metrics": {
+      "n_trades": 76,
+      "win_rate": 0.3553,
+      "gross_pnl_brl": -273.0148,
+      "avg_win_brl": 155.2784,
+      "avg_loss_brl": -91.1333,
+      "profit_factor": 0.9389,
+      "max_drawdown_brl": -1985.0001,
+      "t_stat": -0.2356
+    },
+    "legacy_entry_at_signal_close": {
+      "n_trades": 74,
+      "win_rate": 0.3514,
+      "gross_pnl_brl": -549.1399,
+      "avg_win_brl": 156.6513,
+      "avg_loss_brl": -96.2932,
+      "profit_factor": 0.8812,
+      "max_drawdown_brl": -1976.3468,
+      "t_stat": -0.4721
+    },
+    "bootstrap": {
+      "pnl_p5": -2202.544,
+      "pnl_p50": -293.9875,
+      "pnl_p95": 1721.7284,
+      "prob_loss": 0.5964,
+      "dd_p50": -1303.2482,
+      "dd_p95": -2608.6569
+    },
+    "dsr": {
+      "1": 0.4084,
+      "20": 0.0173,
+      "100": 0.0031
+    },
+    "stress_costs": [
+      {
+        "custo_x": 1.0,
+        "gross_pnl_brl": -273.0148,
+        "profit_factor": 0.9389
+      },
+      {
+        "custo_x": 2.0,
+        "gross_pnl_brl": -492.2148,
+        "profit_factor": 0.8935
+      },
+      {
+        "custo_x": 3.0,
+        "gross_pnl_brl": -711.4148,
+        "profit_factor": 0.8511
+      }
+    ],
+    "reasons": {
+      "stop": 42,
+      "target": 24,
+      "eod": 8,
+      "stop_gap": 2
+    },
+    "monthly_pnl": {
+      "2026-08": 513.72,
+      "2026-09": -915.27,
+      "2026-10": 128.54
+    },
+    "description": "WINZ26, 12/05-16/10 (inclui 15/09-16/10, posterior ao README antigo)"
+  },
+  "config": {
+    "params": {
+      "ema_fast": 9,
+      "ema_slow": 21,
+      "atr_period": 14,
+      "donchian_period": 20,
+      "er_period": 20
+    },
+    "signal": {
+      "session_start": "09:15",
+      "session_end": "17:45",
+      "er_threshold": 0.5
+    },
+    "run": {
+      "atr_stop_mult": "1.5",
+      "risk_reward": "2.0",
+      "contracts": "1",
+      "slippage_ticks": "1",
+      "instrument": "Instrument(name='WIN', point_value=0.2, tick_size=5, fee_round_trip=1.2, currency='BRL')",
+      "force_flat": "17:50"
+    },
+    "min_bars_per_day": 60,
+    "n_trials_assumed": [
+      1,
+      20,
+      100
+    ]
+  }
+}

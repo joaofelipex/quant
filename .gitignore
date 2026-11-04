@@ -26,3 +26,9 @@ dados/raw/
 
 # Packaging
 *.egg-info/
+
+# Artefatos locais
+*.pkl
+.pytest_cache/
+.ruff_cache/
+.coverage

@@ -35,9 +35,10 @@ def sharpe(returns: pd.Series, periods_per_year: int = 252, rf_per_period: float
 
 
 def sortino(returns: pd.Series, periods_per_year: int = 252, rf_per_period: float = 0.0) -> float:
+    """Sortino com desvio *downside* sobre todas as observacoes: sqrt(mean(min(r - rf, 0)^2))."""
     ex = returns.dropna() - rf_per_period
-    downside = ex[ex < 0].std(ddof=1)
-    return float(ex.mean() / downside * np.sqrt(periods_per_year)) if downside and downside > 0 else 0.0
+    downside = float(np.sqrt((np.minimum(ex, 0.0) ** 2).mean())) if len(ex) else 0.0
+    return float(ex.mean() / downside * np.sqrt(periods_per_year)) if downside > 0 else 0.0
 
 
 def calmar(returns: pd.Series, periods_per_year: int = 252) -> float:

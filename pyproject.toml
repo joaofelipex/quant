@@ -4,10 +4,35 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "quant"
-version = "0.2.0"
+version = "0.3.0"
 description = "Pesquisa quantitativa multi-ativo: dados, backtest, validacao"
+readme = "README.md"
 requires-python = ">=3.10"
 dependencies = ["pandas>=2.0", "numpy>=1.24", "matplotlib>=3.7"]
 
+[project.optional-dependencies]
+excel = ["openpyxl>=3.1"]
+dev = ["pytest>=8", "ruff>=0.5", "openpyxl>=3.1"]
+
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = ["error::FutureWarning"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+extend-exclude = ["execucao"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "NPY", "PD"]
+ignore = [
+    "PD011",  # .values em arrays numpy e ok
+    "E741",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]

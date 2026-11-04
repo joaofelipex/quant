@@ -1,16 +1,15 @@
-"""Estrategia de tendencia para WIN: EMA filter + rompimento de canal (Donchian) + stop/alvo por ATR."""
+"""Tendencia intradiaria: filtro EMA + regime ER (Kaufman) + rompimento Donchian; stop/alvo por ATR.
+
+Todos os indicadores sao causais (barra *t* so usa dados ate *t*); o canal Donchian e deslocado em 1
+barra para que o rompimento seja medido contra o canal anterior. Teste de regressao em
+``tests/test_no_lookahead.py``.
+"""
 import pandas as pd
-import numpy as np
 
 
-def load_win_csv(path: str) -> pd.DataFrame:
-    df = pd.read_csv(path, sep=";", header=0, names=["datetime", "open", "high", "low", "close"])
-    df["datetime"] = pd.to_datetime(df["datetime"], format="%d/%m/%Y %H:%M")
-    df = df.sort_values("datetime").drop_duplicates(subset="datetime").reset_index(drop=True)
-    return df
-
-
-def add_indicators(df: pd.DataFrame, ema_fast=9, ema_slow=21, atr_period=14, donchian_period=20, er_period=20) -> pd.DataFrame:
+def add_indicators(
+    df: pd.DataFrame, ema_fast=9, ema_slow=21, atr_period=14, donchian_period=20, er_period=20
+) -> pd.DataFrame:
     df = df.copy()
     df["ema_fast"] = df["close"].ewm(span=ema_fast, adjust=False).mean()
     df["ema_slow"] = df["close"].ewm(span=ema_slow, adjust=False).mean()
@@ -31,7 +30,6 @@ def add_indicators(df: pd.DataFrame, ema_fast=9, ema_slow=21, atr_period=14, don
     path_length = df["close"].diff().abs().rolling(er_period).sum()
     df["er"] = net_change / path_length
 
-    df["time"] = df["datetime"].dt.time
     return df
 
 
@@ -39,7 +37,8 @@ def generate_signals(df: pd.DataFrame, session_start="09:15", session_end="17:45
     df = df.copy()
     start = pd.to_datetime(session_start).time()
     end = pd.to_datetime(session_end).time()
-    in_session = (df["time"] >= start) & (df["time"] <= end)
+    bar_time = df["datetime"].dt.time
+    in_session = (bar_time >= start) & (bar_time <= end)
 
     trend_up = df["ema_fast"] > df["ema_slow"]
     trend_down = df["ema_fast"] < df["ema_slow"]

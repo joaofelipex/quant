@@ -10,8 +10,8 @@ Parametros abaixo (window=50, threshold=0.5, target=8, stop=5) foram
 os que melhor equilibraram numero de trades vs resultado no unico dia
 testado -- profit factor 1.57 sobre 43 trades. Isso pode nao se repetir.
 """
-import pandas as pd
 import numpy as np
+import pandas as pd
 
 
 def load_times_trades(path: str) -> pd.DataFrame:

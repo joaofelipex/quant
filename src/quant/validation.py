@@ -1,8 +1,12 @@
 """Ferramentas anti-autoengano (ver docs/conceitos/06_validacao_backtest.md)."""
-from typing import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
+from statistics import NormalDist
 
 import numpy as np
 import pandas as pd
+
+_N = NormalDist()
+_EULER_GAMMA = 0.5772156649015329
 
 
 def train_test_split_time(df: pd.DataFrame, test_start) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -20,6 +24,60 @@ def walk_forward_windows(index: pd.DatetimeIndex, train: str, test: str) -> Iter
         mid = start + train_off
         yield index[(index >= start) & (index < mid)], index[(index >= mid) & (index < mid + test_off)]
         start += test_off
+
+
+def walk_forward_splits(df: pd.DataFrame, train: str, test: str) -> Iterator[tuple[pd.DataFrame, pd.DataFrame]]:
+    """Janelas (treino, teste) deslizantes sobre ``df['datetime']``; passo = tamanho do teste.
+
+    Os periodos de teste sao disjuntos e consecutivos: concatenados formam a serie OOS.
+    """
+    t = df["datetime"]
+    train_off, test_off = pd.Timedelta(train), pd.Timedelta(test)
+    start = t.min()
+    while start + train_off + test_off <= t.max():
+        mid = start + train_off
+        yield df[(t >= start) & (t < mid)], df[(t >= mid) & (t < mid + test_off)]
+        start += test_off
+
+
+def probabilistic_sharpe_ratio(pnl: pd.Series, sr_benchmark: float = 0.0) -> float:
+    """PSR (Bailey & Lopez de Prado): P(Sharpe verdadeiro > benchmark), por trade, ajustado a skew/kurtosis."""
+    x = pnl.dropna()
+    n = len(x)
+    if n < 3 or x.std(ddof=1) == 0:
+        return float("nan")
+    sr = x.mean() / x.std(ddof=1)
+    skew, kurt = x.skew(), x.kurt() + 3.0  # pandas devolve excesso de curtose
+    denom = 1.0 - skew * sr + (kurt - 1.0) / 4.0 * sr**2
+    if denom <= 0:
+        return float("nan")
+    return float(_N.cdf((sr - sr_benchmark) * np.sqrt(n - 1) / np.sqrt(denom)))
+
+
+def expected_max_sharpe(n_trials: int, sr_variance: float) -> float:
+    """Sharpe maximo esperado entre ``n_trials`` configuracoes sem edge algum (so por selecao)."""
+    if n_trials <= 1:
+        return 0.0
+    return float(np.sqrt(sr_variance) * (
+        (1 - _EULER_GAMMA) * _N.inv_cdf(1 - 1.0 / n_trials)
+        + _EULER_GAMMA * _N.inv_cdf(1 - 1.0 / (n_trials * np.e))
+    ))
+
+
+def deflated_sharpe_ratio(pnl: pd.Series, n_trials: int, trial_srs: Sequence[float] | None = None) -> float:
+    """DSR: PSR contra o melhor Sharpe que o acaso produziria em ``n_trials`` tentativas.
+
+    ``n_trials`` e o numero de variantes/parametros/ideias testados ate chegar a este resultado
+    (conte as descartadas tambem). ``trial_srs`` (Sharpe por trade de cada tentativa) estima a
+    variancia entre tentativas; sem ele, assume-se 1/(n-1), a variancia do estimador sob a nula.
+    Retorna a probabilidade de o edge ser real; < 0.95 = nao descarta sorte de selecao.
+    """
+    x = pnl.dropna()
+    n = len(x)
+    if n < 3:
+        return float("nan")
+    var = float(np.var(trial_srs, ddof=1)) if trial_srs is not None and len(trial_srs) > 1 else 1.0 / (n - 1)
+    return probabilistic_sharpe_ratio(x, sr_benchmark=expected_max_sharpe(n_trials, var))
 
 
 def bootstrap_trades(pnl: pd.Series, n_sims: int = 5000, seed: int = 0) -> dict:

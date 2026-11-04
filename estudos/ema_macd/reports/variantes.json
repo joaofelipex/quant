@@ -1,0 +1,98 @@
+[
+  {
+    "caso": "WIN prev | v10-like sem filtro 300/600",
+    "dias": 62,
+    "trades": 167,
+    "win_rate": 0.35,
+    "pf": 0.85,
+    "pnl_brl": -972.0,
+    "dd_brl": -1574.0,
+    "t_stat": -0.98,
+    "p_prejuizo": 0.84,
+    "dsr": 0.009
+  },
+  {
+    "caso": "WIN prev | v11 filtro lento 300/600",
+    "dias": 62,
+    "trades": 52,
+    "win_rate": 0.35,
+    "pf": 0.94,
+    "pnl_brl": -115.0,
+    "dd_brl": -777.0,
+    "t_stat": -0.21,
+    "p_prejuizo": 0.59,
+    "dsr": 0.05
+  },
+  {
+    "caso": "WIN z26  | sem filtro 300/600",
+    "dias": 47,
+    "trades": 146,
+    "win_rate": 0.38,
+    "pf": 0.97,
+    "pnl_brl": -165.0,
+    "dd_brl": -1194.0,
+    "t_stat": -0.17,
+    "p_prejuizo": 0.56,
+    "dsr": 0.053
+  },
+  {
+    "caso": "WIN z26  | v11 filtro lento 300/600",
+    "dias": 47,
+    "trades": 47,
+    "win_rate": 0.38,
+    "pf": 1.09,
+    "pnl_brl": 148.0,
+    "dd_brl": -796.0,
+    "t_stat": 0.27,
+    "p_prejuizo": 0.4,
+    "dsr": 0.114
+  },
+  {
+    "caso": "WIN z26  | v11 filtro lento 400/800",
+    "dias": 47,
+    "trades": 44,
+    "win_rate": 0.41,
+    "pf": 1.28,
+    "pnl_brl": 493.0,
+    "dd_brl": -497.0,
+    "t_stat": 0.72,
+    "p_prejuizo": 0.23,
+    "dsr": 0.221
+  },
+  {
+    "caso": "WDO      | sem filtro 8/16",
+    "dias": 32,
+    "trades": 67,
+    "win_rate": 0.34,
+    "pf": 0.71,
+    "pnl_brl": -1045.0,
+    "dd_brl": -1281.0,
+    "t_stat": -1.29,
+    "p_prejuizo": 0.9,
+    "dsr": 0.005
+  },
+  {
+    "caso": "WDO      | filtro lento 8/16",
+    "dias": 32,
+    "trades": 25,
+    "win_rate": 0.36,
+    "pf": 0.78,
+    "pnl_brl": -245.0,
+    "dd_brl": -595.0,
+    "t_stat": -0.51,
+    "p_prejuizo": 0.7,
+    "dsr": 0.03
+  },
+  {
+    "caso": "WDO      | filtro lento 15/30",
+    "dias": 32,
+    "trades": 20,
+    "win_rate": 0.5,
+    "pf": 1.69,
+    "pnl_brl": 476.0,
+    "dd_brl": -239.0,
+    "t_stat": 0.82,
+    "p_prejuizo": 0.19,
+    "dsr": 0.245
+  }
+]
