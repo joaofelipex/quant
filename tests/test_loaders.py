@@ -65,3 +65,20 @@ def test_check_bars_pega_ohlc_invalido_e_saltos():
     })
     r = check_bars(df)
     assert r["invalid_ohlc"] == 1 and r["n_jumps_gt_2pct"] == 1
+
+
+def test_iso_ambiguo_nao_troca_mes_e_dia(tmp_path):
+    """Regressao achada no CI (pandas novo): ISO lido com dayfirst virava 2026-03-02 -> 2026-02-03."""
+    p = tmp_path / "c.csv"
+    linhas = ["datetime,open,high,low,close", "2026-03-02 09:05:00,1,2,1,2",
+              "2026-06-05 09:10:00,1,2,1,2", "2026-11-12 09:15:00,1,2,1,2"]
+    p.write_text("\n".join(linhas) + "\n")
+    df = load_bars(p)
+    assert df.datetime.tolist() == [pd.Timestamp("2026-03-02 09:05"), pd.Timestamp("2026-06-05 09:10"),
+                                    pd.Timestamp("2026-11-12 09:15")]
+
+
+def test_dd_mm_aaaa_continua_sendo_dia_primeiro(tmp_path):
+    p = tmp_path / "p.csv"
+    p.write_text("Data;Abertura;Máxima;Mínima;Fechamento\n05/06/2026 09:10;1;2;1;2\n", encoding="utf-8-sig")
+    assert load_bars(p).datetime.iloc[0] == pd.Timestamp("2026-06-05 09:10")

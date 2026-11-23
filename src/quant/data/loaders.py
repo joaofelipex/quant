@@ -28,7 +28,10 @@ def _to_datetime(series: pd.Series) -> pd.Series:
     if pd.api.types.is_numeric_dtype(series):  # serial do Excel (dias desde 1899-12-30)
         dt = pd.Timestamp("1899-12-30") + pd.to_timedelta(series.astype(float), unit="D")
         return dt.dt.round("s")
-    return pd.to_datetime(series.astype(str).str.strip(), dayfirst=True, format="mixed")
+    s = series.astype(str).str.strip()
+    if s.str.match(r"^\d{4}-\d{2}-\d{2}").all():  # ISO: NUNCA com dayfirst (pandas novo troca mes e dia)
+        return pd.to_datetime(s, format="ISO8601")
+    return pd.to_datetime(s, dayfirst=True, format="mixed")  # export do Profit: dd/mm/aaaa hh:mm
 
 
 def _read_raw(path: Path) -> pd.DataFrame:
