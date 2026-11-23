@@ -1,9 +1,13 @@
 """Executores de ordem. A estrategia nunca conhece a corretora: so fala com esta interface."""
 from __future__ import annotations
 
+import logging
+import time
 from abc import ABC, abstractmethod
 
 from .models import Fill, Position
+
+log = logging.getLogger("quant.live")
 
 
 class Executor(ABC):
@@ -20,6 +24,10 @@ class Executor(ABC):
 
     def cancel_stops(self) -> None:  # noqa: B027
         """Cancela stops protetores pendentes."""
+
+    def has_stop(self) -> bool | None:
+        """Ha stop protetor ativo na corretora? ``None`` = nao sei / sem suporte (stop so por software)."""
+        return None
 
     def close_position(self, price_hint: float) -> Fill | None:
         pos = self.position()
@@ -88,10 +96,53 @@ class BinanceFuturesExecutor(Executor):
     def cancel_stops(self) -> None:
         self.ex.cancel_all_orders(self.symbol)
 
+    def has_stop(self) -> bool | None:
+        for o in self.ex.fetch_open_orders(self.symbol):
+            if o.get("reduceOnly") and (o.get("stopPrice") or "stop" in str(o.get("type", "")).lower()):
+                return True
+        return False
+
+    # fee de fallback (taker USD-M sem desconto) e tentativas de consulta ao fill; ajustaveis nos testes
+    FALLBACK_FEE_RATE = 0.0004
+    SETTLE_TRIES = 3
+    SETTLE_DELAY_S = 0.5
+
     def market_order(self, side: int, qty: float, price_hint: float, reduce_only: bool = False) -> Fill:
         qty = float(self.ex.amount_to_precision(self.symbol, qty))
         params = {"reduceOnly": True} if reduce_only else {}
-        o = self.ex.create_order(self.symbol, "market", "buy" if side == 1 else "sell", qty, None, params)
-        price = float(o.get("average") or o.get("price") or price_hint)
-        fee = sum(float(f.get("cost") or 0) for f in (o.get("fees") or []))
-        return Fill(side, qty, price, fee)
+        order = self.ex.create_order(self.symbol, "market", "buy" if side == 1 else "sell", qty, None, params)
+        order = self._settle(order)
+        price = float(order.get("average") or 0)
+        if price <= 0:
+            log.warning("sem preco medio do fill da ordem %s; usando a referencia %.4f", order.get("id"), price_hint)
+            price = price_hint
+        filled = float(order.get("filled") or qty)
+        return Fill(side, filled, price, self._fee(order, price, filled))
+
+    def _settle(self, order: dict) -> dict:
+        """A resposta imediata de uma ordem a mercado pode vir sem preco medio/taxa: consulta ate preencher."""
+        o = order
+        for _ in range(self.SETTLE_TRIES):
+            if float(o.get("average") or 0) > 0 and o.get("status") in ("closed", "filled"):
+                break
+            time.sleep(self.SETTLE_DELAY_S)
+            try:
+                o = self.ex.fetch_order(o["id"], self.symbol)
+            except Exception:  # noqa: BLE001 - segue com o que ha; o aviso sai em market_order
+                log.exception("falha ao consultar a ordem %s", o.get("id"))
+        return o
+
+    def _fee(self, order: dict, price: float, qty: float) -> float:
+        fees = order.get("fees") or ([order["fee"]] if order.get("fee") else [])
+        if not fees:
+            try:
+                trades = self.ex.fetch_my_trades(self.symbol, params={"orderId": order["id"]})
+                fees = [t["fee"] for t in trades if t.get("fee")]
+            except Exception:  # noqa: BLE001
+                log.exception("falha ao consultar trades da ordem %s", order.get("id"))
+        usd = [f for f in fees if f.get("currency") in ("USDT", "USDC", "BUSD")]
+        if fees and len(usd) == len(fees):
+            return sum(float(f.get("cost") or 0) for f in usd)
+        log.warning("taxa da ordem %s indisponivel ou fora de USDT; estimando %.2f bps", order.get("id"),
+                    self.FALLBACK_FEE_RATE * 1e4)
+        return price * qty * self.FALLBACK_FEE_RATE
