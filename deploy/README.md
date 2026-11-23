@@ -9,6 +9,9 @@
 | 2. Runner na testnet | `quant-live.service` com `QUANT_MODE=testnet` | depois da checagem de fumaça (`docs/roteiro_testnet.md`) |
 | 3. Conta real | nada | só com estratégia aprovada pela regra do README |
 
+**Depois de cada fase, rode a verificação na VM:** `sudo bash deploy/verificar.sh` (só consulta; confere DNS, timer, estado,
+permissões, `nginx -t`, HTTP 301, HTTPS 401, certificado e, se instalado, o runner).
+
 ## 0. Base (uma vez)
 
 ```bash
