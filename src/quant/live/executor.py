@@ -10,6 +10,19 @@ from .models import Fill, Position
 log = logging.getLogger("quant.live")
 
 
+def configure_venue(ex, testnet: bool, kind: str = "testnet") -> None:
+    """Aponta um objeto ccxt para o ambiente de teste da Binance. ``kind``: 'testnet' (sandbox legado de futuros,
+    testnet.binancefuture.com) ou 'demo' (Demo Trading, demo-fapi.binance.com). As chaves de um NAO valem no outro."""
+    if not testnet:
+        return
+    if kind == "demo":
+        ex.enable_demo_trading(True)
+    elif kind == "testnet":
+        ex.set_sandbox_mode(True)
+    else:
+        raise ValueError(f"QUANT_TESTNET_KIND invalido: {kind!r} (use 'testnet' ou 'demo')")
+
+
 class Executor(ABC):
     @abstractmethod
     def position(self) -> Position | None:
@@ -69,13 +82,12 @@ class BinanceFuturesExecutor(Executor):
     ``testnet=True`` usa o sandbox. Mainnet exige confirmacao explicita na config (ver config.py).
     """
 
-    def __init__(self, symbol: str, api_key: str, secret: str, testnet: bool = True):
+    def __init__(self, symbol: str, api_key: str, secret: str, testnet: bool = True, testnet_kind: str = "testnet"):
         import ccxt  # import tardio: so quem opera na corretora precisa instalar
 
         self.symbol = symbol
         self.ex = ccxt.binanceusdm({"apiKey": api_key, "secret": secret, "enableRateLimit": True})
-        if testnet:
-            self.ex.set_sandbox_mode(True)
+        configure_venue(self.ex, testnet, testnet_kind)
         self.ex.load_markets()
 
     def position(self) -> Position | None:

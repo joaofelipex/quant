@@ -16,6 +16,7 @@ def build_runner() -> Runner:
     env = os.environ.get
     mode = env("QUANT_MODE", "paper")  # paper | testnet | live
     symbol, tfm = env("QUANT_SYMBOL", "ETH/USDT:USDT"), env("QUANT_TIMEFRAME", "5m")
+    kind = env("QUANT_TESTNET_KIND", "testnet")  # testnet (sandbox legado) | demo (Demo Trading)
 
     if mode == "paper":
         executor = PaperExecutor()
@@ -23,7 +24,7 @@ def build_runner() -> Runner:
         if mode == "live" and env("QUANT_ALLOW_MAINNET") != "yes-i-know":
             raise SystemExit("modo live exige QUANT_ALLOW_MAINNET=yes-i-know (e uma estrategia aprovada pelo README)")
         executor = BinanceFuturesExecutor(symbol, env("BINANCE_API_KEY", ""), env("BINANCE_API_SECRET", ""),
-                                          testnet=(mode == "testnet"))
+                                          testnet=(mode == "testnet"), testnet_kind=kind)
     else:
         raise SystemExit(f"QUANT_MODE invalido: {mode}")
 
@@ -34,7 +35,8 @@ def build_runner() -> Runner:
     def signals(bars):  # mesma estrategia do backtest; cripto opera 24h, entao a janela de sessao e o dia todo
         return tf.generate_signals(tf.add_indicators(bars), session_start="00:00", session_end="23:59")
 
-    return Runner(CcxtFeed(symbol, tfm, testnet=(mode == "testnet")), executor, risk, signals, qty=qty,
+    feed = CcxtFeed(symbol, tfm, testnet=(mode == "testnet"), testnet_kind=kind)
+    return Runner(feed, executor, risk, signals, qty=qty,
                   timeframe=tfm, stop_atr=float(env("QUANT_STOP_ATR", "2.0")),
                   state_path=env("QUANT_STATE", "live_state.json"), kill_file=env("QUANT_KILL_FILE", "KILL"))
 

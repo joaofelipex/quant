@@ -17,13 +17,14 @@ class Feed(ABC):
 class CcxtFeed(Feed):
     """Polling REST via ccxt. Simples e robusto; troque por WebSocket depois se a latencia importar."""
 
-    def __init__(self, symbol: str, timeframe: str = "5m", testnet: bool = False):
+    def __init__(self, symbol: str, timeframe: str = "5m", testnet: bool = False, testnet_kind: str = "testnet"):
         import ccxt
+
+        from .executor import configure_venue
 
         self.symbol, self.timeframe = symbol, timeframe
         self.ex = ccxt.binanceusdm({"enableRateLimit": True})
-        if testnet:
-            self.ex.set_sandbox_mode(True)
+        configure_venue(self.ex, testnet, testnet_kind)
 
     def closed_bars(self, n: int) -> pd.DataFrame:
         raw = self.ex.fetch_ohlcv(self.symbol, self.timeframe, limit=n + 1)[:-1]  # descarta a barra aberta
