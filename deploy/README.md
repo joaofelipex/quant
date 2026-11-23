@@ -65,13 +65,32 @@ Conferência: `curl -I http://quant.mixco.com.br` deve dar **301** (nunca 401 ne
 
 ## 3. Runner na testnet (fase 2)
 
-Só depois de `python -m quant.live.testnet_check` passar (ver `docs/roteiro_testnet.md`).
+Só depois do paper estável. As chaves **nunca** passam pelo chat nem por `echo`: você as digita num terminal seu, na VM.
+
+| Ambiente de teste | Alcança a partir da VM nos EUA? | `QUANT_TESTNET_KIND` |
+|---|---|---|
+| Sandbox legado de futuros (`testnet.binancefuture.com`) | **sim** | `testnet` (padrão) |
+| Demo Trading (`demo-fapi.binance.com`) | **não** (HTTP 451) | `demo` (só em VM fora dos EUA) |
+
+1. **Crie as chaves de teste** no ambiente escolhido (sem permissão de saque). As do sandbox legado não valem no Demo e vice-versa.
+   O sandbox legado foi descontinuado pela Binance em favor do Demo Trading e **pode não aceitar mais cadastros**; se não
+   conseguir chaves nele, rode a checagem de fumaca no seu computador com Demo (`docs/roteiro_testnet.md`) e leve o runner
+   para uma VM fora dos EUA.
+2. **Instale o env e a unit** (a unit só liga depois das chaves):
 
 ```bash
-install -m 0600 deploy/quant-live.env.example /etc/quant-live.env   # QUANT_MODE=testnet + chaves de TESTE
-cp deploy/quant-live.service /etc/systemd/system/ && systemctl daemon-reload
-systemctl enable --now quant-live.service && journalctl -u quant-live -f
+sudo install -m 0600 -o root -g root deploy/quant-live.env.example /etc/quant-live.env
+sudo sed -i 's/^QUANT_MODE=.*/QUANT_MODE=testnet/; s/^QUANT_TIMEFRAME=.*/QUANT_TIMEFRAME=1m/' /etc/quant-live.env   # 1m: mais sinais
+sudo cp deploy/quant-live.service /etc/systemd/system/ && sudo systemctl daemon-reload
 ```
+
+3. **Grave as chaves** (digitação silenciosa, validação de formato, arquivo com modo 600):
+   `sudo bash deploy/definir-chaves.sh`
+4. **Checagem de fumaça** (abre e fecha uma posição mínima na testnet; as chaves vão pelo systemd, nunca pela tela):
+   `sudo bash deploy/testnet-smoke.sh`. Só avance com tudo `OK`.
+5. **Ligue o runner e acompanhe:** `sudo systemctl enable --now quant-live && journalctl -u quant-live -f`
+
+Os dois scripts **recusam** `QUANT_MODE=live`.
 
 **Kill-switch:** `touch /var/lib/quant/KILL` fecha a posição, cancela os stops e **para o serviço de vez**
 (`Restart=on-failure`: o processo sai com código 0; e com o arquivo presente o systemd nem inicia o serviço).

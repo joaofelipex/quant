@@ -103,3 +103,24 @@ def test_trava_com_ccxt_real_nos_dois_ambientes_de_teste():
         assert_test_environment(mainnet)
     with pytest.raises(ValueError):
         configure_venue(ccxt.binanceusdm(), True, "outro")
+
+
+def test_testnet_legado_troca_so_as_urls_de_futuros_e_nao_usa_o_modo_sandbox_do_ccxt():
+    """O ccxt recente recusa chamadas autenticadas de futuros em set_sandbox_mode; por isso so se trocam as URLs."""
+    ccxt = pytest.importorskip("ccxt")
+    from quant.live.executor import CCXT_OPTIONS, LEGACY_TESTNET_HOST, configure_venue
+
+    ex = ccxt.binanceusdm({"apiKey": "x", "secret": "y", **CCXT_OPTIONS})
+    configure_venue(ex, True, "testnet")
+    fut = {k: v for k, v in ex.urls["api"].items() if isinstance(v, str) and "fapi" in v}
+    assert fut and all(v.startswith(LEGACY_TESTNET_HOST) for v in fut.values())  # nenhuma URL de futuros na mainnet
+    assert not any("https://fapi.binance.com" in v for v in fut.values())
+    assert ex.isSandboxModeEnabled is False  # senao o ccxt levanta NotSupported nas chamadas privadas
+    assert_test_environment(ex)
+
+
+def test_ccxt_nao_consulta_o_sapi_de_moedas():
+    """Com chave, o ccxt chamava api.binance.com/sapi (451 em IPs dos EUA) so para listar moedas."""
+    from quant.live.executor import CCXT_OPTIONS
+
+    assert CCXT_OPTIONS["options"]["fetchCurrencies"] is False

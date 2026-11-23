@@ -109,3 +109,25 @@ def test_servicos_tem_privilegio_minimo():
         unit = directives(read(name))
         for d in ("NoNewPrivileges=yes", "ProtectSystem=strict", "PrivateTmp=yes", "StateDirectory=quant"):
             assert d in unit, f"{name} sem {d}"
+
+
+# ---- 4. fase 2: chaves e checagem de fumaca sem expor segredo -----------------------------------------------------
+def test_env_do_runner_define_o_ambiente_de_teste_e_nao_traz_segredo():
+    env = directives(read("quant-live.env.example"))
+    assert "QUANT_TESTNET_KIND=testnet" in env
+    assert "BINANCE_API_KEY=" in env and "BINANCE_API_SECRET=" in env  # vazios no exemplo
+    assert not any(re.match(r"BINANCE_API_(KEY|SECRET)=\S", ln) for ln in env)
+
+
+def test_scripts_da_fase_2_recusam_live_e_nao_imprimem_chaves():
+    for name in ("definir-chaves.sh", "testnet-smoke.sh"):
+        sh = read(name)
+        assert "set -euo pipefail" in sh and "QUANT_MODE=live" in sh and "RECUSADO" in sh
+        assert not re.search(r"echo[^\n]*\$\{?(KEY|SECRET)\b", sh), f"{name} imprime a chave"
+    chaves = read("definir-chaves.sh")
+    assert "read -rsp" in chaves  # digitacao silenciosa
+    assert "[A-Za-z0-9]{20,}" in chaves  # valida o formato antes de gravar
+    assert "install -m 0600" in chaves
+    smoke = read("testnet-smoke.sh")
+    assert "EnvironmentFile=" in smoke and "User=quant" in smoke  # chaves via systemd, nao pela linha de comando
+

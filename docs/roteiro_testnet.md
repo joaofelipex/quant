@@ -8,8 +8,10 @@ PnL aqui não significa nada. Nada neste roteiro libera conta real; isso continu
 ## 0. Preparação
 
 1. Escolha **um** ambiente de teste da Binance e crie as chaves nele (as chaves de um não valem no outro):
-   - `testnet`: sandbox legado de futuros (`testnet.binancefuture.com`);
-   - `demo`: Demo Trading, dentro da conta da Binance (`demo-fapi.binance.com`).
+   - `testnet`: sandbox legado de futuros (`testnet.binancefuture.com`). Responde de IPs dos EUA, mas foi descontinuado
+     pela Binance e **pode não aceitar mais cadastros**;
+   - `demo`: Demo Trading, dentro da conta da Binance (`demo-fapi.binance.com`). **Devolve 451 em IPs dos EUA**: use do
+     seu computador ou de uma VM fora dos EUA.
    Confira na documentação da Binance qual está ativo para o seu perfil hoje; o formato mudou nos últimos anos.
 2. Permissões da chave: **só futuros/trading, sem saque**; restrinja por IP se o ambiente permitir.
 3. Chaves só em variáveis de ambiente / `.env` (copie `deploy/quant-live.env.example`). **Nunca** no chat, no git
@@ -26,7 +28,8 @@ export QUANT_SYMBOL=ETH/USDT:USDT QUANT_QTY=0.01
 ## 1. Checagem automática (5 minutos)
 
 ```bash
-python -m quant.live.testnet_check
+python -m quant.live.testnet_check            # no seu computador
+sudo bash deploy/testnet-smoke.sh              # na VM (chaves via systemd, ver deploy/README.md)
 ```
 
 Abre e fecha **uma** posição mínima e confere cada promessa do executor. O script só fala com testnet/demo: aborta

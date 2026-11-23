@@ -20,10 +20,10 @@ class CcxtFeed(Feed):
     def __init__(self, symbol: str, timeframe: str = "5m", testnet: bool = False, testnet_kind: str = "testnet"):
         import ccxt
 
-        from .executor import configure_venue
+        from .executor import CCXT_OPTIONS, configure_venue
 
         self.symbol, self.timeframe = symbol, timeframe
-        self.ex = ccxt.binanceusdm({"enableRateLimit": True})
+        self.ex = ccxt.binanceusdm(dict(CCXT_OPTIONS))
         configure_venue(self.ex, testnet, testnet_kind)
 
     def closed_bars(self, n: int) -> pd.DataFrame:

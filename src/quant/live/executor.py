@@ -10,15 +10,28 @@ from .models import Fill, Position
 log = logging.getLogger("quant.live")
 
 
+# Chaves de URL de futuros do ccxt que apontam para fapi.binance.com; no testnet legado todas vao para o host de teste.
+LEGACY_TESTNET_HOST = "https://testnet.binancefuture.com"
+CCXT_OPTIONS = {"enableRateLimit": True, "options": {"fetchCurrencies": False}}  # sem /sapi (moedas): so futuros
+
+
 def configure_venue(ex, testnet: bool, kind: str = "testnet") -> None:
     """Aponta um objeto ccxt para o ambiente de teste da Binance. ``kind``: 'testnet' (sandbox legado de futuros,
-    testnet.binancefuture.com) ou 'demo' (Demo Trading, demo-fapi.binance.com). As chaves de um NAO valem no outro."""
+    testnet.binancefuture.com) ou 'demo' (Demo Trading, demo-fapi.binance.com). As chaves de um NAO valem no outro.
+
+    O 'testnet' troca so as URLs de futuros, sem ``set_sandbox_mode``: o ccxt recente recusa chamadas AUTENTICADAS de
+    futuros nesse modo (ele foi descontinuado a favor do Demo Trading), mas o host legado segue respondendo.
+    O 'demo' devolve 451 em IPs dos EUA; o 'testnet' legado responde de la.
+    """
     if not testnet:
         return
     if kind == "demo":
         ex.enable_demo_trading(True)
     elif kind == "testnet":
-        ex.set_sandbox_mode(True)
+        api = ex.urls["api"]
+        for key, url in list(api.items()):
+            if isinstance(url, str) and "https://fapi.binance.com" in url:
+                api[key] = url.replace("https://fapi.binance.com", LEGACY_TESTNET_HOST)
     else:
         raise ValueError(f"QUANT_TESTNET_KIND invalido: {kind!r} (use 'testnet' ou 'demo')")
 
@@ -86,7 +99,7 @@ class BinanceFuturesExecutor(Executor):
         import ccxt  # import tardio: so quem opera na corretora precisa instalar
 
         self.symbol = symbol
-        self.ex = ccxt.binanceusdm({"apiKey": api_key, "secret": secret, "enableRateLimit": True})
+        self.ex = ccxt.binanceusdm({"apiKey": api_key, "secret": secret, **CCXT_OPTIONS})
         configure_venue(self.ex, testnet, testnet_kind)
         self.ex.load_markets()
 
