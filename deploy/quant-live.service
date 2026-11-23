@@ -1,0 +1,16 @@
+[Unit]
+Description=quant live runner
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=quant
+WorkingDirectory=/opt/quant
+EnvironmentFile=/etc/quant-live.env
+ExecStart=/opt/quant/.venv/bin/python -m quant.live.config
+Restart=always
+RestartSec=10
+# parada de emergencia: touch /var/lib/quant/KILL  (fecha a posicao e encerra)
+
+[Install]
+WantedBy=multi-user.target

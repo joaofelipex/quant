@@ -58,6 +58,26 @@ deflated_sharpe_ratio(trades.pnl_brl, n_trials=20)   # conte TODAS as variantes 
 
 Para outro ativo, defina um `Instrument` e passe `instrument=`; para stop fixo em pontos use `stop_col=`.
 
+## Operação ao vivo (esqueleto, cripto)
+
+`src/quant/live/`: feed de barras fechadas → estratégia (a mesma do backtest) → risco → executor. Padrão **paper**.
+
+```bash
+pip install -e ".[live]"
+QUANT_MODE=paper python -m quant.live.config     # simulado, dados reais da Binance
+# testnet: QUANT_MODE=testnet + BINANCE_API_KEY/SECRET; mainnet exige QUANT_ALLOW_MAINNET=yes-i-know
+touch KILL                                        # kill-switch: fecha a posição e encerra
+```
+
+Serviço systemd e `.env` de exemplo em `deploy/`. O executor da Binance ainda **não foi testado** contra a exchange.
+
+**Carteira tsmom_cripto em paper** (`quant.live.portfolio`): um disparo por dia após 00:00 UTC, sem enviar ordens;
+registra pesos, PnL, custo e funding em CSV e reproduz sozinho os dias perdidos. Timer em `deploy/quant-portfolio.*`.
+
+```bash
+QUANT_PORT_STATE=portfolio_state.json QUANT_PORT_LOG=portfolio_log.csv python -m quant.live.portfolio
+```
+
 ## Convenções de execução do motor
 
 Sinal no fechamento *i* → ordem na abertura *i+1* · gap atravessa o stop (sai na abertura) · stop paga slippage,

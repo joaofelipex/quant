@@ -1,0 +1,10 @@
+[Unit]
+Description=Dispara o paper da carteira tsmom_cripto todo dia apos 00:00 UTC
+
+[Timer]
+# 00:10 UTC: o candle diario ja fechou e a abertura do novo dia ja existe
+OnCalendar=*-*-* 00:10:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target
