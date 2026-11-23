@@ -75,7 +75,9 @@ conferido em todas as barras perdidas, e uma barra só é dada como processada d
 de exemplo em `deploy/` (passo a passo em `deploy/README.md`). O executor da Binance ainda **não foi testado** contra a exchange (só contra um ccxt falso em `tests/`).
 
 **Carteira tsmom_cripto em paper** (`quant.live.portfolio`): um disparo por dia após 00:00 UTC, sem enviar ordens;
-registra pesos, PnL, custo e funding em CSV e reproduz sozinho os dias perdidos. Timer em `deploy/quant-portfolio.*`.
+registra pesos, PnL, custo e funding em CSV e reproduz sozinho os dias perdidos. Os preços vêm do endpoint público
+`data-api.binance.vision` (só leitura, sem chave; responde de regiões onde a API principal dá 451); o funding vem da API de
+futuros e, se ela estiver bloqueada, o paper segue sem funding, marca esses dias com `-` e avisa no painel. Timer em `deploy/quant-portfolio.*`.
 
 ```bash
 QUANT_PORT_STATE=portfolio_state.json QUANT_PORT_LOG=portfolio_log.csv python -m quant.live.portfolio

@@ -37,6 +37,10 @@ systemctl enable --now quant-portfolio.timer && systemctl list-timers quant-port
 
 O serviço **nunca lê** `/etc/quant-live.env` (onde ficam as chaves) e roda com privilégio mínimo.
 
+**Região da VM:** o paper usa só dados públicos. Os preços vêm de `data-api.binance.vision`, que responde de qualquer região.
+A API de futuros (funding) devolve 451 em IPs dos EUA (ex.: Oracle Ashburn): nesse caso o paper roda sem funding e o painel avisa;
+o equity ignora o funding (cerca de -1,7% a.a. no estudo). Numa VM em região permitida o funding entra sozinho.
+
 ## 2. Painel com HTTPS (a senha nunca trafega em HTTP)
 
 Ordem obrigatória: a porta 80 só pode servir o desafio do certbot até o certificado existir.

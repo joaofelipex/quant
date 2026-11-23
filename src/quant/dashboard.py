@@ -126,6 +126,11 @@ def build_html(state: dict | None, log: pd.DataFrame, results_md: Path, now: dat
         '<div class="top"><h1>quant &middot; carteira tsmom_cripto</h1><span class="badge">PAPER &middot; sem ordens reais</span></div>',
         f'<div class="sub">Atualizado em {stamp}. Estrategia reprovada na regra do repo; em avaliacao fora da amostra.</div>',
     ]
+    if not log.empty and log["funding"].isna().any():
+        n = int(log["funding"].isna().sum())
+        body.append(f'<div class="sub" style="margin-top:6px"><strong>Funding indisponivel em {n} dia(s)</strong> (a fonte de dados '
+                    "nao alcanca a API de futuros): nesses dias o equity ignora a receita/custo de funding, que o estudo mediu "
+                    "em cerca de -1,7% a.a. Os dias aparecem com &quot;-&quot; na tabela.</div>")
     if log.empty or state is None:
         body.append('<div class="card" style="margin-top:16px">Aguardando o primeiro disparo diario do paper.</div>')
     else:

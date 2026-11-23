@@ -13,6 +13,9 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 import numpy as np
@@ -26,40 +29,60 @@ log = logging.getLogger("quant.live")
 
 SYMBOLS = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "ADAUSDT"]
 
+# Precos: endpoint PUBLICO de dados de mercado da Binance (so leitura, sem chave), o mesmo spot da API principal.
+# Responde tambem de regioes onde api.binance.com devolve 451. Funding: API de futuros, que PODE estar bloqueada
+# (451): nesse caso o paper segue sem funding e marca os dias (ver ``PortfolioPaper.step``).
+DATA_BASE = "https://data-api.binance.vision"
+FUTURES_BASE = "https://fapi.binance.com"
 
-def _ccxt_symbol(s: str, perp: bool = False) -> str:
-    base = s[:-4]
-    return f"{base}/USDT:USDT" if perp else f"{base}/USDT"
+
+def get_json(url: str, tries: int = 3, timeout: float = 20.0):
+    """GET JSON com novas tentativas para 429/5xx/rede. Bloqueio regional (451) e erro definitivo: nao repete."""
+    req = urllib.request.Request(url, headers={"User-Agent": "quant-paper/1.0"})
+    for attempt in range(1, tries + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return json.loads(resp.read().decode())
+        except urllib.error.HTTPError as e:
+            if e.code != 429 and e.code < 500 or attempt == tries:
+                raise
+        except (urllib.error.URLError, TimeoutError):
+            if attempt == tries:
+                raise
+        time.sleep(2.0 * attempt)
+    raise RuntimeError("inalcancavel")  # pragma: no cover
 
 
-def fetch_daily(symbols: list[str], limit: int = 400) -> tuple[pd.DataFrame, pd.DataFrame]:
+def fetch_daily(symbols: list[str], limit: int = 400, base: str = DATA_BASE) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Abertura e fechamento diarios (spot, UTC). A ultima linha e o dia em curso: so a ABERTURA dela vale."""
-    import ccxt
-
-    ex = ccxt.binance({"enableRateLimit": True})
     opens, closes = {}, {}
     for s in symbols:
-        raw = ex.fetch_ohlcv(_ccxt_symbol(s), "1d", limit=limit)
+        raw = get_json(f"{base}/api/v3/klines?symbol={s}&interval=1d&limit={limit}")
         idx = pd.to_datetime([r[0] for r in raw], unit="ms").normalize()
-        opens[s] = pd.Series([r[1] for r in raw], index=idx)
-        closes[s] = pd.Series([r[4] for r in raw], index=idx)
+        opens[s] = pd.Series([float(r[1]) for r in raw], index=idx)
+        closes[s] = pd.Series([float(r[4]) for r in raw], index=idx)
     return pd.DataFrame(opens), pd.DataFrame(closes)
 
 
-def fetch_funding(symbols: list[str], since: pd.Timestamp) -> pd.DataFrame:
-    """Funding somado por dia UTC (positivo = long paga). Falha de rede nao derruba o paper: vira 0 e e logada."""
-    import ccxt
-
-    ex = ccxt.binanceusdm({"enableRateLimit": True})
+def fetch_funding(symbols: list[str], since: pd.Timestamp, base: str = FUTURES_BASE) -> pd.DataFrame:
+    """Funding somado por dia UTC (positivo = long paga). Sem acesso (ex.: 451 por regiao) devolve vazio, loga UMA vez,
+    e o paper segue sem funding: nunca inventa um zero silencioso (as linhas do log ficam marcadas, ver ``step``)."""
     ms = int(since.tz_localize("UTC").timestamp() * 1000)
     out = {}
     for s in symbols:
         try:
-            h = ex.fetch_funding_rate_history(_ccxt_symbol(s, perp=True), since=ms, limit=1000)
-            f = pd.Series([x["fundingRate"] for x in h], index=pd.to_datetime([x["timestamp"] for x in h], unit="ms"))
-            out[s] = f.groupby(f.index.normalize()).sum()
-        except Exception:  # noqa: BLE001
-            log.exception("funding indisponivel para %s; assumindo 0", s)
+            h = get_json(f"{base}/fapi/v1/fundingRate?symbol={s}&startTime={ms}&limit=1000")
+        except urllib.error.HTTPError as e:
+            log.warning("funding indisponivel (HTTP %s em %s); o paper segue SEM funding", e.code, s)
+            if e.code == 451:  # bloqueio regional vale para todos os simbolos: nao insiste
+                break
+            continue
+        except Exception:  # noqa: BLE001 - rede/parse nao derrubam o paper
+            log.exception("funding indisponivel para %s; o paper segue sem ele", s)
+            continue
+        when = pd.to_datetime([x["fundingTime"] for x in h], unit="ms")
+        f = pd.Series([float(x["fundingRate"]) for x in h], index=when)
+        out[s] = f.groupby(f.index.normalize()).sum()
     return pd.DataFrame(out)
 
 
@@ -90,10 +113,11 @@ class PortfolioPaper:
         held = np.array([st["weights"][s] for s in self.symbols])
         o = opens[self.symbols]
         ret = (o.loc[day] / o.loc[prev] - 1).fillna(0.0).to_numpy()
-        fund = (funding.reindex(columns=self.symbols).loc[prev].fillna(0.0).to_numpy()
-                if prev in funding.index else np.zeros(len(self.symbols)))
+        f_prev = (funding.reindex(columns=self.symbols).loc[prev] if prev in funding.index
+                  else pd.Series(np.nan, index=self.symbols)).to_numpy()
+        funding_known = not bool((np.isnan(f_prev) & (held != 0)).any())  # so importa para quem esta posicionado
         pnl = float(held @ ret)
-        fund_pnl = -float(held @ fund)
+        fund_pnl = -float(held @ np.nan_to_num(f_prev))  # sem dado, o equity ignora o funding (nao inventa)
 
         tgt = tsmom.target_weights(closes[self.symbols].loc[:prev], lookbacks=self.lookbacks,
                                    vol_target=self.vol_target).iloc[-1].to_numpy()
@@ -104,7 +128,8 @@ class PortfolioPaper:
         st["equity"] *= 1 + pnl + fund_pnl + cost
         st["weights"] = dict(zip(self.symbols, map(float, new), strict=True))
         st["last_date"] = str(day)[:10]
-        row = {"date": st["last_date"], "equity": st["equity"], "pnl": pnl, "funding": fund_pnl, "cost": cost,
+        row = {"date": st["last_date"], "equity": st["equity"], "pnl": pnl,
+               "funding": fund_pnl if funding_known else float("nan"), "cost": cost,
                "turnover": turnover, "gross": float(np.abs(new).sum()),
                **{f"w_{s}": w for s, w in st["weights"].items()}}
         self._append(row)
@@ -146,8 +171,9 @@ def main() -> None:
                          env("QUANT_PORT_LOG", "portfolio_log.csv"), notify=notify)
     today = pd.Timestamp.now(tz="UTC").tz_localize(None).normalize()
     st = bot.load(today)
-    opens, closes = fetch_daily(SYMBOLS)
-    funding = fetch_funding(SYMBOLS, pd.Timestamp(st["last_date"]) - pd.Timedelta(days=1))
+    opens, closes = fetch_daily(SYMBOLS, base=env("QUANT_DATA_BASE", DATA_BASE))
+    funding = fetch_funding(SYMBOLS, pd.Timestamp(st["last_date"]) - pd.Timedelta(days=1),
+                            env("QUANT_FUNDING_BASE", FUTURES_BASE))
     rows = bot.run(opens, closes, funding, today)
     st = bot.load(today)
     log.info("dias processados: %d | ultimo: %s | equity: %.4f | pesos: %s", len(rows), st["last_date"], st["equity"],
