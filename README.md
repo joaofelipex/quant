@@ -65,7 +65,7 @@ Para outro ativo, defina um `Instrument` e passe `instrument=`; para stop fixo e
 
 ```bash
 pip install -e ".[live]"
-QUANT_MODE=paper python -m quant.live.config     # simulado, dados reais da Binance
+QUANT_MODE=paper python -m quant.live.config     # simulado, sem chave; barras do endpoint público de spot
 # testnet: QUANT_MODE=testnet + BINANCE_API_KEY/SECRET (`QUANT_TESTNET_KIND=testnet|demo`; roteiro em `docs/roteiro_testnet.md`); mainnet exige QUANT_ALLOW_MAINNET=yes-i-know
 touch KILL                                        # kill-switch: fecha a posição e encerra
 ```

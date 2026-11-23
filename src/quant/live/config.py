@@ -7,9 +7,19 @@ import os
 from quant.strategies import trend_follow as tf
 
 from .executor import BinanceFuturesExecutor, PaperExecutor
-from .feed import CcxtFeed
+from .feed import CcxtFeed, PublicSpotFeed
 from .risk import RiskLimits, RiskManager
 from .runner import Runner
+
+
+def build_feed(mode: str, symbol: str, timeframe: str, kind: str, choice: str = "auto"):
+    """``auto``: o paper le o endpoint PUBLICO de spot (alcancavel de qualquer regiao, sem chave); testnet/live leem a
+    exchange via ccxt (precos do mesmo ambiente em que as ordens vao). ``public``/``ccxt`` forcam a escolha."""
+    if choice not in {"auto", "public", "ccxt"}:
+        raise SystemExit(f"QUANT_FEED invalido: {choice!r} (auto | public | ccxt)")
+    if choice == "public" or (choice == "auto" and mode == "paper"):
+        return PublicSpotFeed(symbol, timeframe)
+    return CcxtFeed(symbol, timeframe, testnet=(mode == "testnet"), testnet_kind=kind)
 
 
 def build_runner() -> Runner:
@@ -35,7 +45,7 @@ def build_runner() -> Runner:
     def signals(bars):  # mesma estrategia do backtest; cripto opera 24h, entao a janela de sessao e o dia todo
         return tf.generate_signals(tf.add_indicators(bars), session_start="00:00", session_end="23:59")
 
-    feed = CcxtFeed(symbol, tfm, testnet=(mode == "testnet"), testnet_kind=kind)
+    feed = build_feed(mode, symbol, tfm, kind, env("QUANT_FEED", "auto"))
     return Runner(feed, executor, risk, signals, qty=qty,
                   timeframe=tfm, stop_atr=float(env("QUANT_STOP_ATR", "2.0")),
                   state_path=env("QUANT_STATE", "live_state.json"), kill_file=env("QUANT_KILL_FILE", "KILL"))

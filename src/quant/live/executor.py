@@ -55,6 +55,13 @@ class Executor(ABC):
         """Ha stop protetor ativo na corretora? ``None`` = nao sei / sem suporte (stop so por software)."""
         return None
 
+    def export_state(self) -> dict | None:
+        """Estado proprio a guardar junto com o do runner (so o paper: a corretora real ja guarda a posicao)."""
+        return None
+
+    def import_state(self, state: dict) -> None:  # noqa: B027
+        """Restaura o que ``export_state`` devolveu."""
+
     def close_position(self, price_hint: float) -> Fill | None:
         pos = self.position()
         if pos is None:
@@ -72,6 +79,14 @@ class PaperExecutor(Executor):
 
     def position(self) -> Position | None:
         return self._pos
+
+    def export_state(self) -> dict | None:
+        p = self._pos
+        return {"pos": {"side": p.side, "qty": p.qty, "entry": p.entry}} if p else {"pos": None}
+
+    def import_state(self, state: dict) -> None:
+        p = (state or {}).get("pos")
+        self._pos = Position(int(p["side"]), float(p["qty"]), float(p["entry"])) if p else None
 
     def market_order(self, side: int, qty: float, price_hint: float, reduce_only: bool = False) -> Fill:
         if side not in (-1, 1) or qty <= 0:

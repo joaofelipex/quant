@@ -9,6 +9,7 @@ import pytest
 from test_portfolio_paper import _bot, _panel, _start_state
 
 from quant import dashboard
+from quant.live import http as live_http
 from quant.live import portfolio as pf
 
 DAY_MS = 86_400_000
@@ -69,9 +70,9 @@ def test_get_json_repete_429_mas_nao_repete_451(monkeypatch):
             raise http_error(429)
         return Resp(json.dumps([1, 2]).encode())
 
-    monkeypatch.setattr(pf.time, "sleep", lambda s: None)
-    monkeypatch.setattr(pf.urllib.request, "urlopen", urlopen_429_depois_ok)
-    assert pf.get_json("https://x") == [1, 2] and chamadas["n"] == 2
+    monkeypatch.setattr(live_http.time, "sleep", lambda s: None)
+    monkeypatch.setattr(live_http.urllib.request, "urlopen", urlopen_429_depois_ok)
+    assert live_http.get_json("https://x") == [1, 2] and chamadas["n"] == 2
 
     chamadas["n"] = 0
 
@@ -79,9 +80,9 @@ def test_get_json_repete_429_mas_nao_repete_451(monkeypatch):
         chamadas["n"] += 1
         raise http_error(451)
 
-    monkeypatch.setattr(pf.urllib.request, "urlopen", urlopen_451)
+    monkeypatch.setattr(live_http.urllib.request, "urlopen", urlopen_451)
     with pytest.raises(urllib.error.HTTPError):
-        pf.get_json("https://x")
+        live_http.get_json("https://x")
     assert chamadas["n"] == 1  # bloqueio regional e definitivo: nao insiste
 
 

@@ -13,9 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-import time
 import urllib.error
-import urllib.request
 from pathlib import Path
 
 import numpy as np
@@ -23,6 +21,7 @@ import pandas as pd
 
 from quant.strategies import tsmom
 
+from .http import get_json
 from .notify import Notify, no_notify, telegram_notifier
 
 log = logging.getLogger("quant.live")
@@ -34,23 +33,6 @@ SYMBOLS = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "ADAUSDT"]
 # (451): nesse caso o paper segue sem funding e marca os dias (ver ``PortfolioPaper.step``).
 DATA_BASE = "https://data-api.binance.vision"
 FUTURES_BASE = "https://fapi.binance.com"
-
-
-def get_json(url: str, tries: int = 3, timeout: float = 20.0):
-    """GET JSON com novas tentativas para 429/5xx/rede. Bloqueio regional (451) e erro definitivo: nao repete."""
-    req = urllib.request.Request(url, headers={"User-Agent": "quant-paper/1.0"})
-    for attempt in range(1, tries + 1):
-        try:
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
-                return json.loads(resp.read().decode())
-        except urllib.error.HTTPError as e:
-            if e.code != 429 and e.code < 500 or attempt == tries:
-                raise
-        except (urllib.error.URLError, TimeoutError):
-            if attempt == tries:
-                raise
-        time.sleep(2.0 * attempt)
-    raise RuntimeError("inalcancavel")  # pragma: no cover
 
 
 def fetch_daily(symbols: list[str], limit: int = 400, base: str = DATA_BASE) -> tuple[pd.DataFrame, pd.DataFrame]:

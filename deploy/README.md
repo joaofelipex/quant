@@ -63,7 +63,34 @@ nginx -t && systemctl reload nginx
 Conferência: `curl -I http://quant.mixco.com.br` deve dar **301** (nunca 401 nem o painel);
 `curl -u usuario https://quant.mixco.com.br` deve mostrar o painel.
 
-## 3. Runner na testnet (fase 2)
+## 3. Runner (fase 2)
+
+### 3a. Sem chaves: paper com dados reais (a partir da VM nos EUA)
+
+Não precisa de nenhuma chave da Binance e **não envia ordens**. O executor é simulado (`PaperExecutor`) e os preços vêm do endpoint
+público de dados (`data-api.binance.vision`, spot `ETHUSDT`, sem a base spot-perp de poucos bps). A posição simulada, o stop e o risco
+sobrevivem a reinícios do serviço (estado em `/var/lib/quant/live_state.json`).
+
+```bash
+sudo install -m 0600 -o root -g root deploy/quant-live.env.example /etc/quant-live.env      # só se ainda não existir
+sudo sed -i 's/^QUANT_MODE=.*/QUANT_MODE=paper/; s/^QUANT_TIMEFRAME=.*/QUANT_TIMEFRAME=1m/' /etc/quant-live.env
+sudo cp deploy/quant-live.service /etc/systemd/system/ && sudo systemctl daemon-reload
+sudo systemctl enable --now quant-live && journalctl -u quant-live -f
+```
+
+O que o paper cobre do `docs/roteiro_testnet.md` e o que **só** a exchange cobre:
+
+| Ensaio | No paper sem chaves | Só com a exchange |
+|---|---|---|
+| A entrada ponta a ponta | sim (stop por software) | stop `STOP_MARKET` no book |
+| B processo morre com posição | sim (a posição simulada é restaurada) | stop continua vivo na exchange |
+| C/D stop apagado ou disparado pela corretora | não | sim |
+| E kill-switch, G perda diária, H dado atrasado | sim | |
+| F rede cai | parcial (feed público) | ordens e reconciliação reais |
+
+O paper **não prova** que o executor da Binance funciona: isso continua dependendo da testnet com chaves (3b).
+
+### 3b. Testnet com chaves de teste (opcional, quando você as tiver)
 
 Só depois do paper estável. As chaves **nunca** passam pelo chat nem por `echo`: você as digita num terminal seu, na VM.
 

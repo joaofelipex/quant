@@ -53,7 +53,8 @@ class Runner:
     # ---- estado -----------------------------------------------------------------------------------------------
     def _save(self) -> None:
         s = {"last_bar": str(self.last_bar) if self.last_bar is not None else None, "stop": self.stop,
-             "stop_dist": self.stop_dist, "entry": self.entry, "risk": self.risk.state()}
+             "stop_dist": self.stop_dist, "entry": self.entry, "risk": self.risk.state(),
+             "executor": self.executor.export_state()}
         tmp = self.state_path.with_suffix(".tmp")
         tmp.write_text(json.dumps(s))
         tmp.replace(self.state_path)  # escrita atomica
@@ -64,6 +65,8 @@ class Runner:
             self.last_bar = pd.Timestamp(s["last_bar"]) if s.get("last_bar") else None
             self.stop, self.stop_dist, self.entry = s.get("stop"), s.get("stop_dist"), s.get("entry")
             self.risk.load(s.get("risk", {}))
+            if s.get("executor") is not None:
+                self.executor.import_state(s["executor"])  # paper: a posicao simulada sobrevive ao reinicio
         pos = self.executor.position()  # a corretora manda: reconcilia na partida
         if pos is not None and self.stop is None:
             log.error("posicao aberta sem stop conhecido (%s): travando entradas, feche manualmente", pos)
