@@ -2,15 +2,30 @@
 Description=quant live runner
 After=network-online.target
 Wants=network-online.target
+# kill-switch: com o arquivo KILL presente o servico nem inicia (mesmo caminho de QUANT_KILL_FILE no .env)
+ConditionPathExists=!/var/lib/quant/KILL
+# loop de falhas: para de religar depois de 5 quedas em 5 minutos
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 User=quant
 WorkingDirectory=/opt/quant
 EnvironmentFile=/etc/quant-live.env
+Environment=PYTHONDONTWRITEBYTECODE=1
 ExecStart=/opt/quant/.venv/bin/python -m quant.live.config
-Restart=always
+# religa SO se cair por erro; o kill-switch encerra com codigo 0 e o servico fica parado
+Restart=on-failure
 RestartSec=10
-# parada de emergencia: touch /var/lib/quant/KILL  (fecha a posicao e encerra)
+
+StateDirectory=quant
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+
+# parada de emergencia:  touch /var/lib/quant/KILL   (fecha a posicao, cancela os stops e para para sempre)
+# para retomar:          rm /var/lib/quant/KILL && systemctl start quant-live   (o halt do risco continua; ver docs)
 
 [Install]
 WantedBy=multi-user.target

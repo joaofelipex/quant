@@ -7,9 +7,16 @@ Wants=network-online.target
 Type=oneshot
 User=quant
 WorkingDirectory=/opt/quant
-EnvironmentFile=/etc/quant-live.env
-Environment=QUANT_PORT_STATE=/var/lib/quant/portfolio_state.json
-Environment=QUANT_PORT_LOG=/var/lib/quant/portfolio_log.csv
+# so dados publicos: este servico NUNCA le /etc/quant-live.env (la ficam as chaves da corretora)
+EnvironmentFile=/etc/quant-portfolio.env
+Environment=PYTHONDONTWRITEBYTECODE=1
 ExecStart=/opt/quant/.venv/bin/python -m quant.live.portfolio
 ExecStartPost=/opt/quant/.venv/bin/python -m quant.dashboard
-Environment=QUANT_SITE_DIR=/var/www/quant
+
+# privilegio minimo: so escreve em /var/lib/quant (criado pelo systemd) e no diretorio do painel
+StateDirectory=quant
+ReadWritePaths=/var/www/quant
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes

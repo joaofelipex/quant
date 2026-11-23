@@ -47,7 +47,7 @@ se a URL da API não for de teste e não toca em posição que já exista na con
 
 **Passa quando:** todas as checagens ficam `OK` em **3 execuções em dias diferentes**. Anote cada uma em §4.
 
-## 2. Ensaios com o runner (um por vez, em primeiro plano; não use o systemd)
+## 2. Ensaios com o runner (um por vez; em primeiro plano ou sob o systemd conforme `deploy/README.md`)
 
 Rode em `QUANT_MODE=testnet` com `QUANT_TIMEFRAME=1m` para surgir sinal mais rápido (a testnet tem dados ralos; é
 teste de encanamento). Pode levar horas até a primeira entrada. Registre o log de cada ensaio.
@@ -63,8 +63,9 @@ teste de encanamento). Pode levar horas até a primeira entrada. Registre o log 
 | G | Perda diária | `QUANT_MAX_DAILY_LOSS=1` e deixe perder | "perda diária atingiu", entradas bloqueadas, saídas continuam funcionando |
 | H | Dado atrasado | pause o feed (ou o relógio) além de 120 s | entrada "bloqueada: dado atrasado"; nenhuma ordem enviada |
 
-Atenção ao ensaio E: com `Restart=always` o systemd religa o runner enquanto o arquivo `KILL` existir (problema
-conhecido, ainda não corrigido). Por isso estes ensaios são em primeiro plano.
+Ensaio E sob o systemd (`deploy/README.md`): o kill-switch encerra o processo com código 0 e `Restart=on-failure`
+não o religa; com o arquivo `KILL` presente o serviço nem inicia. Confirme com `systemctl status quant-live`
+(deve ficar `inactive`) e, para retomar, siga a seção do README de deploy.
 
 ## 3. Critério para avançar
 

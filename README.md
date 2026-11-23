@@ -71,8 +71,8 @@ touch KILL                                        # kill-switch: fecha a posiç�
 ```
 
 Cada entrada é seguida de um stop protetor na corretora (fecha a posição e trava se não conseguir colocá-lo); o stop também é
-conferido em todas as barras perdidas, e uma barra só é dada como processada depois de agir sobre ela. Serviço systemd e `.env`
-de exemplo em `deploy/`. O executor da Binance ainda **não foi testado** contra a exchange (só contra um ccxt falso em `tests/`).
+conferido em todas as barras perdidas, e uma barra só é dada como processada depois de agir sobre ela. Serviço systemd, nginx e `.env`
+de exemplo em `deploy/` (passo a passo em `deploy/README.md`). O executor da Binance ainda **não foi testado** contra a exchange (só contra um ccxt falso em `tests/`).
 
 **Carteira tsmom_cripto em paper** (`quant.live.portfolio`): um disparo por dia após 00:00 UTC, sem enviar ordens;
 registra pesos, PnL, custo e funding em CSV e reproduz sozinho os dias perdidos. Timer em `deploy/quant-portfolio.*`.
