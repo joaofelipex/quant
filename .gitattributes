@@ -1,0 +1,3 @@
+# Arquivos que rodam em Linux (VM) precisam de LF
+deploy/** text eol=lf
+*.sh text eol=lf
