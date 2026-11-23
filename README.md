@@ -10,6 +10,7 @@ tentar derrubar a estratégia**, não confirmá-la.
 |---|---|---|---|
 | [`win_trend`](estudos/win_trend/README.md) | Donchian + regime ER no WIN 5 min | PF 1,27 no contrato anterior (t = 0,9), **0,94** no WINZ26; DSR 0,05–0,15 | inconclusivo |
 | [`ema_macd`](estudos/ema_macd/README.md) | Cruzamento EMA + MACD (robôs NTSL v11–v14) em WIN e WDO | PF 0,7–1,1 sem filtro/com filtro; positivos só após ajustar stop | sem edge |
+| [`funding_carry`](estudos/funding_carry/README.md) | Carry de funding delta-neutro (spot + perpétuo vendido), BTC+ETH | 5,2% a.a. líquido no hold-out (7,5% sempre ligado), mas liquidação da perna vendida em altas de 20–31% no dia | **reprovada** (risco de cauda) |
 | [`eth_flow`](estudos/eth_flow/README.md) | Scalper de agressão no ETH futuro | 1 dia de dado | hipótese |
 
 Nada acima está liberado para conta real. Diário do que já foi tentado: [`estudos/win_trend/diario.md`](estudos/win_trend/diario.md).

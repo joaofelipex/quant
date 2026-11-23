@@ -78,3 +78,15 @@ def test_stress_costs_repassa_fatores():
     out = stress_costs(fake_run, factors=(1.0, 2.0, 3.0), slippage_ticks=1)
     assert chamadas == [(1.0, 1.0), (2.0, 2.0), (3.0, 3.0)]
     assert list(out.custo_x) == [1.0, 2.0, 3.0] and out.gross_pnl_brl.is_monotonic_decreasing
+
+
+def test_block_bootstrap_mean_limites_e_reprodutibilidade():
+    from quant.validation import block_bootstrap_mean
+
+    pos = pd.Series(np.full(100, 0.001))
+    assert block_bootstrap_mean(pos)["prob_le_0"] == 0.0
+    ruido = pd.Series(np.random.default_rng(0).normal(0, 0.01, 400))
+    ruido = ruido - ruido.mean()  # media exatamente zero: P(media <= 0) tem de ficar perto de 50%
+    a, b = block_bootstrap_mean(ruido, seed=3), block_bootstrap_mean(ruido, seed=3)
+    assert a == b and 0.3 < a["prob_le_0"] < 0.7 and a["mean_p5"] < a["mean_p95"]
+    assert block_bootstrap_mean(pd.Series([], dtype=float)) == {}

@@ -100,6 +100,21 @@ def bootstrap_trades(pnl: pd.Series, n_sims: int = 5000, seed: int = 0) -> dict:
     }
 
 
+def block_bootstrap_mean(r: pd.Series, block: int = 20, n_sims: int = 5000, seed: int = 0) -> dict:
+    """Bootstrap circular em blocos da MEDIA (preserva autocorrelacao): IC 90% e P(media <= 0)."""
+    x = r.dropna().to_numpy()
+    m = len(x)
+    if m == 0:
+        return {}
+    rng = np.random.default_rng(seed)
+    n_blocks = int(np.ceil(m / block))
+    starts = rng.integers(0, m, size=(n_sims, n_blocks))
+    idx = (starts[:, :, None] + np.arange(block)[None, None, :]) % m
+    means = x[idx.reshape(n_sims, -1)[:, :m]].mean(axis=1)
+    return {"mean_p5": float(np.percentile(means, 5)), "mean_p95": float(np.percentile(means, 95)),
+            "prob_le_0": float((means <= 0).mean())}
+
+
 def stress_costs(run: Callable[..., tuple[pd.DataFrame, dict]], factors=(1.0, 2.0, 3.0), **kwargs) -> pd.DataFrame:
     """Reroda o backtest multiplicando slippage e taxa; o edge sobrevive a custos pessimistas?"""
     rows = []

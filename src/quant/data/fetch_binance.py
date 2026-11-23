@@ -3,7 +3,9 @@
 Uso:
     python -m quant.data.fetch_binance BTCUSDT 1m 2023-01 2024-12
     python -m quant.data.fetch_binance ETHUSDT 5m 2024-01        # so um mes
-Saida: dados/raw/binance/<SIMBOLO>_<intervalo>.csv (datetime UTC, OHLCV, trades, taker_buy_base)
+    python -m quant.data.fetch_binance BTCUSDT 1d 2020-01 2025-10 --perp   # perpetuo USD-M
+Saida: dados/raw/binance/<SIMBOLO>_<intervalo>.csv (datetime UTC, OHLCV, trades, taker_buy_base);
+       com --perp: <SIMBOLO>_<intervalo>_perp.csv
 """
 import io
 import sys
@@ -15,6 +17,7 @@ from pathlib import Path
 import pandas as pd
 
 BASE = "https://data.binance.vision/data/spot/monthly/klines"
+BASE_PERP = "https://data.binance.vision/data/futures/um/monthly/klines"
 OUT_DIR = Path(__file__).resolve().parents[3] / "dados" / "raw" / "binance"
 COLS = [
     "open_time", "open", "high", "low", "close", "volume", "close_time",
@@ -26,8 +29,8 @@ def month_range(start: str, end: str):
     return [p.strftime("%Y-%m") for p in pd.period_range(start, end, freq="M")]
 
 
-def fetch_month(symbol: str, interval: str, month: str) -> pd.DataFrame | None:
-    url = f"{BASE}/{symbol}/{interval}/{symbol}-{interval}-{month}.zip"
+def fetch_month(symbol: str, interval: str, month: str, perp: bool = False) -> pd.DataFrame | None:
+    url = f"{BASE_PERP if perp else BASE}/{symbol}/{interval}/{symbol}-{interval}-{month}.zip"
     try:
         raw = urllib.request.urlopen(url, timeout=60).read()
     except urllib.error.HTTPError as e:
@@ -48,14 +51,16 @@ def fetch_month(symbol: str, interval: str, month: str) -> pd.DataFrame | None:
 
 
 def main():
-    if len(sys.argv) < 4:
+    args = [a for a in sys.argv[1:] if a != "--perp"]
+    perp = "--perp" in sys.argv[1:]
+    if len(args) < 3:
         sys.exit(__doc__)
-    symbol, interval, start = sys.argv[1].upper(), sys.argv[2], sys.argv[3]
-    end = sys.argv[4] if len(sys.argv) > 4 else start
+    symbol, interval, start = args[0].upper(), args[1], args[2]
+    end = args[3] if len(args) > 3 else start
 
     frames = []
     for month in month_range(start, end):
-        df = fetch_month(symbol, interval, month)
+        df = fetch_month(symbol, interval, month, perp)
         print(f"{symbol} {interval} {month}: {'indisponivel' if df is None else f'{len(df)} candles'}")
         if df is not None:
             frames.append(df)
@@ -64,7 +69,7 @@ def main():
 
     out = pd.concat(frames).drop_duplicates("datetime").sort_values("datetime")
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    path = OUT_DIR / f"{symbol}_{interval}.csv"
+    path = OUT_DIR / f"{symbol}_{interval}{'_perp' if perp else ''}.csv"
     out.to_csv(path, index=False)
     print(f"\n{len(out)} candles, {out['datetime'].min()} a {out['datetime'].max()}\nSalvo em {path}")
 
