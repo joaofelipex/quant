@@ -68,6 +68,14 @@ def test_final_porta_80_nao_serve_painel_nem_pede_senha():
     assert "TLSv1.2 TLSv1.3" in https[0] and "limit_req zone=quant_login" in https[0]
 
 
+def test_painel_serve_a_pagina_inicial_pelo_index():
+    """Regressao achada na VM real: 'try_files $uri =404' devolvia 404 em '/', o painel nunca abria."""
+    https = [b for b in server_blocks(read("nginx-quant.conf")) if "443 ssl" in b][0]
+    assert "index index.html" in https
+    m = re.search(r"try_files\s+([^;]+);", https)
+    assert m and "$uri/" in m.group(1), "try_files sem $uri/ nao resolve '/' para o index"
+
+
 def test_bootstrap_so_responde_ao_desafio_do_certbot():
     blocks = server_blocks(read("nginx-quant-bootstrap.conf"))
     assert len(blocks) == 1
