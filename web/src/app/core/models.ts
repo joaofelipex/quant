@@ -44,8 +44,15 @@ export interface DeployStatus {
 
 export interface AlertsStatus { canais: string[]; ultima_checagem: number | null; estado: unknown }
 
+export interface AssetRow {
+  asset: string; position: { side: number; qty: number; price: number } | null; stop: number | null; pnl: number;
+  trades: number; halted: boolean; reason: string; last_bar_age_s: number | null; started: boolean;
+}
+
 export interface Status {
   now: number;
+  asset?: string | null;
+  assets?: AssetRow[];
   bars: [number, number][];
   service: string;
   kill_file: boolean;
@@ -78,6 +85,8 @@ export interface OrderPosition {
 export interface OrderResult {
   id?: string; ok?: boolean; msg?: string; aviso?: string; pendente?: boolean; position?: OrderPosition | null;
 }
-export interface OrderRequest { action: 'status' | 'open' | 'close' | 'stop'; side?: 1 | -1; qty?: number; stop_pct?: number | null }
+export interface OrderRequest {
+  action: 'status' | 'open' | 'close' | 'stop'; side?: 1 | -1; qty?: number; usd?: number; asset?: string | null; stop_pct?: number | null;
+}
 
 export type Tone = '' | 'ok' | 'bad' | 'warn';

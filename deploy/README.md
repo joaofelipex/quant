@@ -173,6 +173,14 @@ Depois de confirmar que o login funciona, desligue o basic auth do nginx **só**
 os blocos `/controle/` de `deploy/nginx-quant.conf` para `/etc/nginx/sites-available/quant.mixco.com.br`, `sudo nginx -t` e
 `sudo systemctl reload nginx`.
 
+**Vários ativos:** com `QUANT_ASSETS=BTC,ETH,SOL,...` (ou `todos`; escolha na aba Operar) o `quant-live` roda um runner por ativo no
+mesmo processo, só na Kalshi demo: BTC, ETH, SOL, XRP, BNB, DOGE, ADA, LINK, LTC, BCH, DOT, NEAR, UNI, AAVE, SUI, XLM, HBAR, HYPE, WLD e ZEC
+(perpétuos de cripto com barras públicas na Binance; ações e câmbio ficam de fora porque a estratégia usa o feed cripto). Cada ativo tem
+estado próprio (`live_state.<ATIVO>.json`), stop na corretora e limite de perda diária próprio; `QUANT_MAX_TOTAL_LOSS` trava as
+**entradas** de todos quando a soma do dia chega nele; o kill-switch fecha todos. Tamanho por valor: `QUANT_NOTIONAL` (USD por entrada,
+padrão 25) vira contratos inteiros de cada ativo. A Visão geral mostra a tabela de ativos; a Boleta passa a pedir ativo + valor em USD.
+Sem `QUANT_ASSETS` tudo funciona como antes (um ativo, `QUANT_QTY`).
+
 **Boleta manual (Boleta):** comprar, vender, colocar stop e fechar a mão pelo painel, só na Kalshi **demo**. O painel não tem
 chave: ele grava um pedido validado e dispara `quant-order.service` (que tem a chave e recusa tudo que não seja `kalshi` +
 `testnet`). Abrir/proteger exige o runner parado; fechar e consultar sempre funcionam. Teto de 0,05 por ordem; o KILL bloqueia

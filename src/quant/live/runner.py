@@ -42,9 +42,10 @@ class Runner:
                  timeframe: str = "5m", stop_atr: float = 2.0, warmup: int = 300,
                  state_path: str | Path = "live_state.json", kill_file: str | Path = "KILL",
                  now_fn: Callable[[], pd.Timestamp] = _utc_now, trades_path: str | Path | None = None,
-                 label: str = ""):
+                 label: str = "", notional: float | None = None):
         self.feed, self.executor, self.risk, self.signals = feed, executor, risk, signals
         self.qty, self.stop_atr, self.warmup = qty, stop_atr, warmup
+        self.notional = notional  # se informado, cada entrada vale ~este valor (USD) e ``qty`` e ignorada
         self.bar_s = TIMEFRAME_SECONDS[timeframe]
         self.state_path, self.kill_file, self.now_fn = Path(state_path), Path(kill_file), now_fn
         self.trades_path = Path(trades_path) if trades_path else None
@@ -54,6 +55,10 @@ class Runner:
         self.stop_dist: float | None = None  # distancia do stop, para recalcular a partir do preco real de entrada
         self.entry: dict | None = None  # entrada CONFIRMADA: side, qty, price
         self._restore()
+
+    def _size(self, price: float) -> float:
+        """Quantidade da proxima entrada: fixa (``qty``) ou ``notional`` / preco (mesmo valor em qualquer ativo)."""
+        return self.notional / price if self.notional else self.qty
 
     # ---- estado -----------------------------------------------------------------------------------------------
     def _save(self) -> None:
@@ -197,7 +202,7 @@ class Runner:
             self._close(float(last["close"]), now, "sinal oposto")
             pos, result = None, "saida_sinal"
         if pos is None and sig != 0 and result == "ok":
-            ok, why = self.risk.check_entry(self.qty, now, bar_close)
+            ok, why = self.risk.check_entry(self._size(float(last["close"])), now, bar_close)
             if ok:
                 protected = self._enter(sig, float(last["close"]), float(row["atr"]), now)
                 result = "entrada" if protected else "sem_protecao"
@@ -213,7 +218,7 @@ class Runner:
         self.stop_dist = self.stop_atr * atr
         self.stop, self.entry = hint - sig * self.stop_dist, None  # provisorios; salvos antes de mandar a ordem
         self._save()
-        fill = self.executor.market_order(sig, self.qty, hint)
+        fill = self.executor.market_order(sig, self._size(hint), hint)
         self.entry = {"side": sig, "qty": fill.qty, "price": fill.price}
         self.stop = fill.price - sig * self.stop_dist
         log.info("entrada %+d @ %.4f stop=%.4f", sig, fill.price, self.stop)

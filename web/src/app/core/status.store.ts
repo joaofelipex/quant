@@ -32,6 +32,8 @@ export class StatusStore {
   private readonly api = inject(ApiService);
   private readonly auth = inject(AuthService);
   private readonly manual = new Subject<void>();
+  /** Ativo mostrado (runner multi-ativo); null = o que o servidor escolher (o primeiro). */
+  readonly asset = signal<string | null>(null);
 
   readonly data = signal<Status | null>(null);
   readonly error = signal<string | null>(null);
@@ -42,7 +44,7 @@ export class StatusStore {
   constructor() {
     merge(timer(0, POLL_MS), this.manual).pipe(
       filter(() => this.auth.user() != null && (typeof document === 'undefined' || !document.hidden)),
-      exhaustMap(() => this.api.status().pipe(
+      exhaustMap(() => this.api.status(this.asset()).pipe(
         catchError(e => { this.error.set(errMsg(e)); this.loading.set(false); return EMPTY; }))),
       takeUntilDestroyed(inject(DestroyRef)),
     ).subscribe(d => { this.data.set(d); this.error.set(null); this.loading.set(false); });
@@ -52,4 +54,6 @@ export class StatusStore {
   }
 
   refresh(): void { this.manual.next(); }
+
+  select(asset: string): void { this.asset.set(asset); this.refresh(); }
 }

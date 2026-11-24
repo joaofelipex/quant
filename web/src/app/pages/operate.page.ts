@@ -1,6 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService, errMsg } from '../core/api.service';
+import { ASSETS } from '../core/assets';
 import { AuthService } from '../core/auth.service';
 import { runAction } from '../core/action';
 import { SettingsResponse } from '../core/models';
@@ -11,12 +12,13 @@ import { PageHead } from '../shared/page-head';
 import { ToastService } from '../shared/toast';
 
 export const SETTING_KEYS = ['QUANT_MODE', 'QUANT_VENUE', 'QUANT_TIMEFRAME', 'QUANT_QTY', 'QUANT_MAX_DAILY_LOSS',
-                             'QUANT_STOP_ATR'] as const;
+                             'QUANT_STOP_ATR', 'QUANT_ASSETS', 'QUANT_NOTIONAL', 'QUANT_MAX_TOTAL_LOSS'] as const;
 type Key = (typeof SETTING_KEYS)[number];
 
 const LABEL: Record<Key, string> = {
   QUANT_MODE: 'modo', QUANT_VENUE: 'corretora', QUANT_TIMEFRAME: 'timeframe', QUANT_QTY: 'quantidade',
-  QUANT_MAX_DAILY_LOSS: 'perda máxima/dia', QUANT_STOP_ATR: 'stop (× ATR)',
+  QUANT_MAX_DAILY_LOSS: 'perda máxima/dia', QUANT_STOP_ATR: 'stop (× ATR)', QUANT_ASSETS: 'ativos',
+  QUANT_NOTIONAL: 'valor por entrada (USD)', QUANT_MAX_TOTAL_LOSS: 'perda máxima total/dia',
 };
 
 @Component({
@@ -79,6 +81,30 @@ const LABEL: Record<Key, string> = {
       <p class="note mt">Modo <b>live</b> e Polymarket não podem ser ligados por aqui (só por edição na VM).</p>
     </section>
 
+    <section class="card mt">
+      <div class="card-h">
+        <div><h2>Ativos</h2><div class="sub">cada ativo marcado ganha o próprio runner, posição, stop e limite de perda (só Kalshi demo)</div></div>
+        <div class="row"><button class="btn sm" [disabled]="!auth.canOperate()" (click)="pickAll()">Todos</button>
+          <button class="btn sm ghost" [disabled]="!auth.canOperate()" (click)="pickNone()">Nenhum</button></div>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        @for (a of assetList; track a) {
+          <button type="button" class="btn sm" [class.primary]="picked().has(a)" [disabled]="!auth.canOperate()" (click)="toggle(a)"
+                  [attr.aria-pressed]="picked().has(a)">{{ a }}</button>
+        }
+      </div>
+      <p class="note mt">{{ picked().size ? picked().size + ' ativo(s): a "Quantidade" acima é ignorada e cada entrada vale ~' + (form()['QUANT_NOTIONAL'] || '25') + ' USD.' : 'Nenhum marcado: o runner opera um ativo só (o do modo antigo, com a Quantidade acima).' }}</p>
+      <div class="grid cols-3 mt">
+        <label class="field"><span>Valor por entrada (USD)</span>
+          <input inputmode="decimal" [ngModel]="form()['QUANT_NOTIONAL']" (ngModelChange)="set('QUANT_NOTIONAL', $event)">
+          <span class="hint">vira contratos inteiros de cada ativo</span></label>
+        <label class="field"><span>Perda máxima total por dia</span>
+          <input inputmode="decimal" [ngModel]="form()['QUANT_MAX_TOTAL_LOSS']" (ngModelChange)="set('QUANT_MAX_TOTAL_LOSS', $event)">
+          <span class="hint">soma de todos os ativos; ao passar, trava as entradas de todos</span></label>
+      </div>
+      <p class="note mt">Salve e reinicie em <b>Parâmetros</b> acima para valer.</p>
+    </section>
+
     <h2 class="mt" style="margin-bottom:10px">Corretoras</h2>
     <div class="grid cols-3">
       @for (v of venues(); track v.name) {
@@ -112,6 +138,8 @@ export class OperatePage {
   protected readonly form = signal<Record<string, string>>({});
   private readonly initial = signal<Record<string, string>>({});
   protected readonly busy = signal(false);
+  protected readonly assetList = ASSETS;
+  protected readonly picked = computed(() => new Set((this.form()['QUANT_ASSETS'] ?? '').split(',').map(a => a.trim()).filter(Boolean)));
   protected readonly active = computed(() => this.store.data()?.service === 'active');
   protected readonly killed = computed(() => this.store.data()?.kill_file === true);
   protected readonly dirty = computed(() => SETTING_KEYS.some(k => (this.form()[k] ?? '') !== (this.initial()[k] ?? '')));
@@ -138,6 +166,14 @@ export class OperatePage {
     });
   }
 
+  protected toggle(a: string): void {
+    const s = new Set(this.picked());
+    if (s.has(a)) s.delete(a); else s.add(a);
+    this.set('QUANT_ASSETS', ASSETS.filter(x => s.has(x)).join(','));
+  }
+  protected pickAll(): void { this.set('QUANT_ASSETS', ASSETS.join(',')); }
+  protected pickNone(): void { this.set('QUANT_ASSETS', ''); }
+
   protected set(k: Key, v: string): void { this.form.update(f => ({ ...f, [k]: v })); }
   protected reset(): void { this.form.set({ ...this.initial() }); }
 
@@ -153,7 +189,7 @@ export class OperatePage {
     const changes: string[] = [];
     SETTING_KEYS.forEach(k => {
       const v = (this.form()[k] ?? '').toString().trim();
-      if (v) body[k] = v;
+      if (v || k === 'QUANT_ASSETS') body[k] = v;  // ativos vazio = voltar ao modo de um ativo só
       if (v !== (this.initial()[k] ?? '')) changes.push(`${LABEL[k]}: ${this.initial()[k] ?? '—'} → ${v || '—'}`);
     });
     if (!(await this.confirmSvc.ask({ title: 'Salvar e reiniciar o runner?', confirmLabel: 'Salvar e reiniciar', body: changes.join('\n') }))) return;

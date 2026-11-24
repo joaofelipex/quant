@@ -38,7 +38,7 @@ interface PositionView { side: number; qty: number; entry: number }
       <section class="card hero">
         <div>
           <span class="pill" [class]="active() ? store.banner().tone || 'ok' : 'bad'"><span class="dot" [class.pulse]="store.banner().tone === 'ok'"></span>{{ heroPill() }}</span>
-          <h2>{{ cfg()['QUANT_SYMBOL'] || '—' }} · {{ cfg()['QUANT_TIMEFRAME'] || '—' }}</h2>
+          <h2>{{ d.asset || cfg()['QUANT_SYMBOL'] || '—' }} · {{ cfg()['QUANT_TIMEFRAME'] || '—' }}</h2>
           <div class="chips">
             <span class="pill" [class]="cfg()['QUANT_MODE'] === 'paper' ? '' : 'warn'">{{ cfg()['QUANT_MODE'] || '—' }}</span>
             <span class="pill accent">{{ cfg()['QUANT_VENUE'] || 'binance' }}</span>
@@ -51,6 +51,31 @@ interface PositionView { side: number; qty: number; entry: number }
           <div class="num" [class]="windowTone()">{{ windowChange() }}</div>
         </div>
       </section>
+
+      @if (d.assets?.length) {
+        <section class="card mt">
+          <div class="card-h">
+            <div><h2>Ativos em operação ({{ d.assets!.length }})</h2>
+              <div class="sub">{{ openCount() }} posição(ões) aberta(s) · PnL do dia somado
+                <b class="num" [class]="tone(totalPnl())">{{ fmt(totalPnl(), 4) }}</b> · clique num ativo para ver o gráfico dele</div></div>
+          </div>
+          <div class="scroll-x"><table>
+            <thead><tr><th>Ativo</th><th>Posição</th><th class="r">PnL do dia</th><th class="r">Trades</th><th>Última barra</th><th>Estado</th></tr></thead>
+            <tbody>
+              @for (a of d.assets!; track a.asset) {
+                <tr class="cursor-pointer" [class.bg-accent-soft]="a.asset === d.asset" (click)="store.select(a.asset)" tabindex="0" (keydown.enter)="store.select(a.asset)">
+                  <td><b>{{ a.asset }}</b></td>
+                  <td>@if (a.position) { <span class="pill" [class]="a.position.side > 0 ? 'ok' : 'bad'">{{ a.position.side > 0 ? 'LONG' : 'SHORT' }}</span> <span class="sub num">@ {{ fmt(a.position.price) }}</span> } @else { <span class="sub">—</span> }</td>
+                  <td class="r num" [class]="tone(a.pnl)">{{ fmt(a.pnl, 4) }}</td>
+                  <td class="r num">{{ a.trades }}</td>
+                  <td class="sub">{{ a.last_bar_age_s == null ? '—' : 'há ' + dur(a.last_bar_age_s) }}</td>
+                  <td>@if (!a.started) { <span class="pill">aguardando</span> } @else if (a.halted) { <span class="pill bad" [title]="a.reason">travado</span> } @else { <span class="pill ok">ok</span> }</td>
+                </tr>
+              }
+            </tbody>
+          </table></div>
+        </section>
+      }
 
       <div class="grid cols-4 mt">
         <app-kpi label="posição" [value]="positionLabel()" [sub]="positionSub()" [tone]="position() ? (position()!.side > 0 ? 'ok' : 'bad') : ''" />
@@ -122,6 +147,8 @@ export class OverviewPage {
   protected readonly tone = tone;
   protected readonly logTone = logTone;
 
+  protected readonly openCount = computed(() => (this.d()?.assets ?? []).filter(a => a.position).length);
+  protected readonly totalPnl = computed(() => (this.d()?.assets ?? []).reduce((s, a) => s + a.pnl, 0));
   protected readonly cfg = computed(() => this.d()?.config ?? {});
   protected readonly risk = computed(() => this.d()?.state?.risk ?? {});
   protected readonly active = computed(() => this.d()?.service === 'active');

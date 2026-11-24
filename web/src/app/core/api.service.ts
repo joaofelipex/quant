@@ -11,7 +11,9 @@ export class ApiService {
   private readonly http = inject(HttpClient);
 
   // caminhos relativos: o painel vive em /controle/ atras do nginx (e na raiz no `ng serve`)
-  status(): Observable<Status> { return this.http.get<Status>('api/status'); }
+  status(asset?: string | null): Observable<Status> {
+    return this.http.get<Status>('api/status', { params: asset ? { asset } : {} });
+  }
   settings(): Observable<SettingsResponse> { return this.http.get<SettingsResponse>('api/settings'); }
   trades(): Observable<TradesSummary> { return this.http.get<TradesSummary>('api/trades'); }
 

@@ -17,7 +17,8 @@ from pathlib import Path
 log = logging.getLogger("quant.manual")
 
 ACTIONS = ("status", "open", "close", "stop")
-MAX_QTY = 0.05                  # teto por ordem manual (50 contratos de 0.001 ETH)
+MAX_QTY = 0.05                  # teto por ordem manual no ativo unico (50 contratos de 0.001 ETH)
+MAX_USD = 200.0                 # teto por ordem manual quando o ativo e escolhido (tamanho em dolares)
 STOP_PCT_RANGE = (0.1, 20.0)    # stop em % do preco de entrada
 TRADE_FIELDS = ["ts", "origem", "side", "qty", "entrada", "saida", "pnl", "motivo"]  # = runner.TRADE_FIELDS
 
@@ -34,11 +35,20 @@ def validate(req: object) -> dict:
     if action not in ACTIONS:
         raise OrderError(f"acao invalida: {action!r} ({' | '.join(ACTIONS)})")
     out: dict = {"id": str(req.get("id") or "")[:64], "action": action}
+    if req.get("asset") not in (None, ""):
+        from .live.assets import CRYPTO
+
+        if req["asset"] not in CRYPTO:
+            raise OrderError(f"ativo invalido: {req['asset']!r}")
+        out["asset"] = req["asset"]
     if action == "open":
         if req.get("side") not in (1, -1) or isinstance(req.get("side"), bool):
             raise OrderError("side deve ser 1 (comprar) ou -1 (vender)")
         out["side"] = int(req["side"])
-        out["qty"] = _num(req.get("qty"), "quantidade", 0.0, MAX_QTY)
+        if "asset" in out:
+            out["usd"] = _num(req.get("usd"), "valor em USD", 0.0, MAX_USD)
+        else:
+            out["qty"] = _num(req.get("qty"), "quantidade", 0.0, MAX_QTY)
     if action in ("open", "stop"):
         pct = req.get("stop_pct")
         if action == "stop" and pct is None:
@@ -115,7 +125,7 @@ def execute(req: dict, ex, *, price_fn, kill_file: Path | None = None, trades_pa
         if price is None:
             return {"ok": False, "msg": "sem preco do feed publico agora; tente de novo", "position": None}
         try:
-            fill = ex.market_order(req["side"], req["qty"], price)
+            fill = ex.market_order(req["side"], req["qty"] if "qty" in req else req["usd"] / price, price)
         except (KalshiError, ValueError) as e:
             return {"ok": False, "msg": f"ordem recusada: {e}", "position": _position_view(ex, price)}
         if save_basis:
@@ -198,19 +208,24 @@ def main(env=os.environ.get) -> int:
         # trava dura: so demo da Kalshi. Producao/outras corretoras nunca passam por aqui.
         if env("QUANT_MODE", "paper") != "testnet" or env("QUANT_VENUE", "binance") != "kalshi":
             raise OrderError("boleta manual so funciona com QUANT_VENUE=kalshi e QUANT_MODE=testnet (demo)")
+        from .live import assets
         from .live.config import build_kalshi
 
-        ex = build_kalshi("testnet", env)
+        asset = req.get("asset")
+        ex = build_kalshi("testnet", env, assets.ticker(asset) if asset else None)
         state_path = Path(env("QUANT_STATE", "/var/lib/quant/live_state.json"))
+        if asset:  # cada ativo tem o proprio estado (a base de preco do demo e por mercado)
+            state_path = state_path.parent / f"live_state.{asset}.json"
         if state_path.exists():
             try:
                 ex.import_state(json.loads(state_path.read_text()).get("executor") or {})
             except (OSError, ValueError):
                 pass
         trades = env("QUANT_TRADES_LOG")
-        symbol = env("QUANT_SYMBOL", "ETH/USDT:USDT")
+        symbol = assets.symbol(asset) if asset else env("QUANT_SYMBOL", "ETH/USDT:USDT")
         out = execute(req, ex, price_fn=lambda: spot_price(symbol), kill_file=Path(env("QUANT_KILL_FILE", "KILL")),
-                      trades_path=Path(trades) if trades else None, save_basis=_save_basis_factory(state_path))
+                      trades_path=Path(trades) if trades else None, save_basis=_save_basis_factory(state_path),
+                      label=f"kalshi/testnet:{asset}" if asset else "kalshi/testnet")
     except OrderError as e:
         out = {"ok": False, "msg": str(e), "position": None}
     except Exception as e:  # noqa: BLE001 - o painel precisa de uma resposta, mesmo em erro inesperado

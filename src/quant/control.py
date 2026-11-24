@@ -21,11 +21,11 @@ import time
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote
+from urllib.parse import parse_qs, unquote, urlsplit
 
 SERVICE = "quant-live"
 ENV_WHITELIST = ("QUANT_MODE", "QUANT_VENUE", "QUANT_SYMBOL", "QUANT_TIMEFRAME", "QUANT_QTY", "QUANT_MAX_DAILY_LOSS",
-                 "QUANT_STOP_ATR", "QUANT_TESTNET_KIND")
+                 "QUANT_STOP_ATR", "QUANT_TESTNET_KIND", "QUANT_ASSETS", "QUANT_NOTIONAL", "QUANT_MAX_TOTAL_LOSS")
 RUNTIME_ENV = Path("/var/lib/quant/runtime.env")
 VERBS = ("start", "stop", "restart")
 
@@ -54,6 +54,15 @@ def _num(lo: float, hi: float):
     return check
 
 
+def _assets(v: str) -> str:
+    from .live import assets
+
+    try:
+        return ",".join(assets.parse(v))  # vazio = volta ao modo de um ativo so
+    except ValueError as e:
+        raise SettingError(str(e)) from None
+
+
 # so o que o navegador pode mudar; live e polymarket (sem testnet) ficam de fora de proposito
 SETTINGS = {
     "QUANT_MODE": _enum("paper", "testnet"),
@@ -62,6 +71,9 @@ SETTINGS = {
     "QUANT_QTY": _num(0, 1.0),
     "QUANT_MAX_DAILY_LOSS": _num(0, 1000),
     "QUANT_STOP_ATR": _num(0, 10),
+    "QUANT_ASSETS": _assets,
+    "QUANT_NOTIONAL": _num(0, 1000),
+    "QUANT_MAX_TOTAL_LOSS": _num(0, 100000),
 }
 
 
@@ -327,20 +339,45 @@ def read_selfcheck(path: Path) -> dict | None:
         return None
 
 
-def build_status(state_path: Path, kill_file: Path, *, now: float | None = None) -> dict:
-    now = time.time() if now is None else now
-    state = read_state(state_path)
-    last_bar_age = None
+def _bar_age(state: dict | None, now: float) -> int | None:
     if state and state.get("last_bar"):
         try:
             import pandas as pd
-            last_bar_age = round(now - pd.Timestamp(state["last_bar"], tz="UTC").timestamp())
+            return round(now - pd.Timestamp(state["last_bar"], tz="UTC").timestamp())
         except (ValueError, TypeError):
-            pass
+            return None
+    return None
+
+
+def assets_summary(state_dir: Path, names: list[str], now: float) -> list[dict]:
+    """Uma linha por ativo do runner multi-ativo, lida dos ``live_state.<ATIVO>.json`` (sem falar com a corretora)."""
+    out = []
+    for a in names:
+        st = read_state(state_dir / f"live_state.{a}.json")
+        risk = (st or {}).get("risk") or {}
+        ent = (st or {}).get("entry")
+        out.append({"asset": a, "position": ent, "stop": (st or {}).get("stop"), "pnl": float(risk.get("pnl") or 0.0),
+                    "trades": int(risk.get("trades") or 0), "halted": bool(risk.get("halted")),
+                    "reason": risk.get("reason") or "", "last_bar_age_s": _bar_age(st, now), "started": st is not None})
+    return out
+
+
+def build_status(state_path: Path, kill_file: Path, *, now: float | None = None, asset: str | None = None) -> dict:
+    now = time.time() if now is None else now
+    from .live import assets as assets_mod
+
     cfg = runner_config()
+    names = [a for a in cfg.get("QUANT_ASSETS", "").split(",") if a in assets_mod.CRYPTO]
+    if asset not in names:
+        asset = names[0] if names else None
+    state = read_state(state_path.parent / f"live_state.{asset}.json" if asset else state_path)
+    last_bar_age = _bar_age(state, now)
+    symbol = assets_mod.symbol(asset) if asset else cfg.get("QUANT_SYMBOL", "ETH/USDT:USDT")
     return {
         "now": now,
-        "bars": recent_closes(cfg.get("QUANT_SYMBOL", "ETH/USDT:USDT"), cfg.get("QUANT_TIMEFRAME", "1m")),
+        "asset": asset,
+        "assets": assets_summary(state_path.parent, names, now) if names else [],
+        "bars": recent_closes(symbol, cfg.get("QUANT_TIMEFRAME", "1m")),
         "service": _run(["systemctl", "is-active", SERVICE]) or "desconhecido",
         "kill_file": kill_file.exists(),
         "config": cfg,
@@ -467,7 +504,8 @@ def make_handler(state_path: Path, kill_file: Path, runtime_path: Path = RUNTIME
             if self._account("GET", path, sess, {}):
                 return
             if path == "/api/status":
-                self._json(200, build_status(state_path, kill_file))
+                q = parse_qs(urlsplit(self.path).query)
+                self._json(200, build_status(state_path, kill_file, asset=(q.get("asset") or [None])[0]))
             elif path == "/api/trades":
                 self._json(200, trades_summary(Path(os.environ.get("QUANT_TRADES_LOG", "trades.csv")), 500))
             elif path == "/api/trades.csv":
