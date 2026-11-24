@@ -12,6 +12,7 @@ import json
 import os
 import subprocess
 import time
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -52,6 +53,27 @@ def read_state(path: Path) -> dict | None:
         return None
 
 
+_BARS_CACHE: dict = {"t": 0.0, "key": None, "data": []}
+
+
+def recent_closes(symbol: str, interval: str, n: int = 120, *, now: float | None = None) -> list[list[float]]:
+    """[[ts_ms, close], ...] das ultimas barras fechadas do endpoint publico de spot (cache de 10 s); [] se falhar."""
+    now = time.time() if now is None else now
+    pair = symbol.split(":")[0].replace("/", "")
+    key = (pair, interval, n)
+    if _BARS_CACHE["key"] == key and now - _BARS_CACHE["t"] < 10:
+        return _BARS_CACHE["data"]
+    url = f"https://data-api.binance.vision/api/v3/klines?symbol={pair}&interval={interval}&limit={n + 1}"
+    try:
+        with urllib.request.urlopen(url, timeout=5) as r:
+            raw = json.load(r)[:-1]
+        data = [[int(k[0]), float(k[4])] for k in raw]
+    except (OSError, ValueError, KeyError, IndexError):
+        data = []
+    _BARS_CACHE.update({"t": now, "key": key, "data": data})
+    return data
+
+
 def build_status(state_path: Path, kill_file: Path, *, now: float | None = None) -> dict:
     now = time.time() if now is None else now
     state = read_state(state_path)
@@ -62,11 +84,13 @@ def build_status(state_path: Path, kill_file: Path, *, now: float | None = None)
             last_bar_age = round(now - pd.Timestamp(state["last_bar"], tz="UTC").timestamp())
         except (ValueError, TypeError):
             pass
+    cfg = runner_config()
     return {
         "now": now,
+        "bars": recent_closes(cfg.get("QUANT_SYMBOL", "ETH/USDT:USDT"), cfg.get("QUANT_TIMEFRAME", "1m")),
         "service": _run(["systemctl", "is-active", SERVICE]) or "desconhecido",
         "kill_file": kill_file.exists(),
-        "config": runner_config(),
+        "config": cfg,
         "state": state,
         "last_bar_age_s": last_bar_age,
         "log": _run(["journalctl", "-u", SERVICE, "-n", "40", "--no-pager", "-o", "short-iso"]).splitlines()[-40:],

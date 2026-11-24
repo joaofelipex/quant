@@ -123,7 +123,7 @@ def build_html(state: dict | None, log: pd.DataFrame, results_md: Path, now: dat
     now = now or datetime.now(timezone.utc)
     stamp = now.strftime("%d/%m/%Y %H:%M UTC")
     body = [
-        '<div class="top"><h1>quant &middot; carteira tsmom_cripto</h1><span class="badge">PAPER &middot; sem ordens reais</span></div>',
+        '<div class="top"><h1>quant &middot; carteira tsmom_cripto</h1><span class="badge">PAPER &middot; sem ordens reais</span> <a class="badge" href="/controle/">controle do runner &rarr;</a></div>',
         f'<div class="sub">Atualizado em {stamp}. Estrategia reprovada na regra do repo; em avaliacao fora da amostra.</div>',
     ]
     if not log.empty and log["funding"].isna().any():

@@ -80,3 +80,11 @@ def test_unit_e_nginx_do_controle():
     https = ng.split("listen 443")[1]
     assert "location /controle/" in https and "proxy_pass http://127.0.0.1:8765/" in https
     assert "controle" not in ng.split("listen 443")[0]  # nada de controle na porta 80
+
+
+def test_barras_recentes_falham_para_lista_vazia(monkeypatch):
+    def boom(*a, **k):
+        raise OSError("sem rede")
+    monkeypatch.setattr(control.urllib.request, "urlopen", boom)
+    control._BARS_CACHE.update({"t": 0.0, "key": None, "data": []})
+    assert control.recent_closes("ETH/USDT:USDT", "1m", now=1000.0) == []
