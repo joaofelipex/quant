@@ -339,6 +339,21 @@ def read_selfcheck(path: Path) -> dict | None:
         return None
 
 
+_KFEEDS: dict[str, object] = {}
+
+
+def kalshi_closes(ticker: str, n: int = 120) -> list[list[float]]:
+    """[[ts_ms, close], ...] das velas de 1 min da Kalshi (ativos sem par na Binance); [] se falhar. Feed em cache."""
+    from .live.feed import KalshiFeed
+
+    try:
+        feed = _KFEEDS.get(ticker) or _KFEEDS.setdefault(ticker, KalshiFeed(ticker, "1m"))
+        df = feed.closed_bars(n)  # type: ignore[attr-defined]
+        return [[int(t.timestamp() * 1000), float(c)] for t, c in zip(df["datetime"], df["close"], strict=True)]
+    except Exception:  # noqa: BLE001 - o painel nao pode cair porque a Kalshi demorou
+        return []
+
+
 def _bar_age(state: dict | None, now: float) -> int | None:
     if state and state.get("last_bar"):
         try:
@@ -367,17 +382,21 @@ def build_status(state_path: Path, kill_file: Path, *, now: float | None = None,
     from .live import assets as assets_mod
 
     cfg = runner_config()
-    names = [a for a in cfg.get("QUANT_ASSETS", "").split(",") if a in assets_mod.CRYPTO]
+    names = [a for a in cfg.get("QUANT_ASSETS", "").split(",") if a in assets_mod.CATALOG]
     if asset not in names:
         asset = names[0] if names else None
     state = read_state(state_path.parent / f"live_state.{asset}.json" if asset else state_path)
     last_bar_age = _bar_age(state, now)
-    symbol = assets_mod.symbol(asset) if asset else cfg.get("QUANT_SYMBOL", "ETH/USDT:USDT")
+    tf = cfg.get("QUANT_TIMEFRAME", "1m")
+    if asset and not assets_mod.uses_binance(asset):
+        bars = kalshi_closes(assets_mod.ticker(asset))
+    else:
+        bars = recent_closes(assets_mod.symbol(asset) if asset else cfg.get("QUANT_SYMBOL", "ETH/USDT:USDT"), tf)
     return {
         "now": now,
         "asset": asset,
         "assets": assets_summary(state_path.parent, names, now) if names else [],
-        "bars": recent_closes(symbol, cfg.get("QUANT_TIMEFRAME", "1m")),
+        "bars": bars,
         "service": _run(["systemctl", "is-active", SERVICE]) or "desconhecido",
         "kill_file": kill_file.exists(),
         "config": cfg,
@@ -514,6 +533,10 @@ def make_handler(state_path: Path, kill_file: Path, runtime_path: Path = RUNTIME
                 except OSError:
                     body = b""
                 self._send(200, body, "text/csv; charset=utf-8")
+            elif path == "/api/markets":
+                from .live import assets as assets_mod
+
+                self._json(200, {"markets": assets_mod.rows(), "binance": list(assets_mod.CRYPTO)})
             elif path == "/api/order":
                 self._json(200, read_order(Path(os.environ.get("QUANT_ORDER_RESULT", str(ORDER_RESULT)))))
             elif path == "/api/settings":

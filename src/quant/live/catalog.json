@@ -1,0 +1,872 @@
+[
+ {
+  "id": "AAVE",
+  "ticker": "KXAAVEPERP1",
+  "title": "AAVE",
+  "cls": "Crypto"
+ },
+ {
+  "id": "ADA",
+  "ticker": "KXADAPERP1",
+  "title": "ADA",
+  "cls": "Crypto"
+ },
+ {
+  "id": "BCH",
+  "ticker": "KXBCHPERP1",
+  "title": "BCH",
+  "cls": "Crypto"
+ },
+ {
+  "id": "BNB",
+  "ticker": "KXBNBPERP1",
+  "title": "BNB",
+  "cls": "Crypto"
+ },
+ {
+  "id": "BTC",
+  "ticker": "KXBTCPERP1",
+  "title": "BTC",
+  "cls": "Crypto"
+ },
+ {
+  "id": "DOGE",
+  "ticker": "KXDOGEPERP1",
+  "title": "DOGE",
+  "cls": "Crypto"
+ },
+ {
+  "id": "DOT",
+  "ticker": "KXDOTPERP1",
+  "title": "DOT",
+  "cls": "Crypto"
+ },
+ {
+  "id": "ETH",
+  "ticker": "KXETHPERP1",
+  "title": "ETH",
+  "cls": "Crypto"
+ },
+ {
+  "id": "HBAR",
+  "ticker": "KXHBARPERP1",
+  "title": "HBAR",
+  "cls": "Crypto"
+ },
+ {
+  "id": "HYPE",
+  "ticker": "KXHYPEPERP1",
+  "title": "HYPE",
+  "cls": "Crypto"
+ },
+ {
+  "id": "KPEPE",
+  "ticker": "KXKPEPEPERP1",
+  "title": "kPEPE",
+  "cls": "Crypto"
+ },
+ {
+  "id": "KSHIB",
+  "ticker": "KXKSHIBPERP1",
+  "title": "1K kSHIB",
+  "cls": "Crypto"
+ },
+ {
+  "id": "LINK",
+  "ticker": "KXLINKPERP1",
+  "title": "LINK-USD",
+  "cls": "Crypto"
+ },
+ {
+  "id": "LTC",
+  "ticker": "KXLTCPERP1",
+  "title": "LTC",
+  "cls": "Crypto"
+ },
+ {
+  "id": "NEAR",
+  "ticker": "KXNEARPERP1",
+  "title": "NEAR",
+  "cls": "Crypto"
+ },
+ {
+  "id": "SOL",
+  "ticker": "KXSOLPERP1",
+  "title": "SOL",
+  "cls": "Crypto"
+ },
+ {
+  "id": "SUI",
+  "ticker": "KXSUIPERP1",
+  "title": "SUI",
+  "cls": "Crypto"
+ },
+ {
+  "id": "UNI",
+  "ticker": "KXUNIPERP1",
+  "title": "UNI",
+  "cls": "Crypto"
+ },
+ {
+  "id": "VVV",
+  "ticker": "KXVVVPERP1",
+  "title": "VVV",
+  "cls": "Crypto"
+ },
+ {
+  "id": "WLD",
+  "ticker": "KXWLDPERP1",
+  "title": "WLD",
+  "cls": "Crypto"
+ },
+ {
+  "id": "XLM",
+  "ticker": "KXXLMPERP1",
+  "title": "XLM",
+  "cls": "Crypto"
+ },
+ {
+  "id": "XRP",
+  "ticker": "KXXRPPERP1",
+  "title": "XRP",
+  "cls": "Crypto"
+ },
+ {
+  "id": "ZEC",
+  "ticker": "KXZECPERP1",
+  "title": "ZEC",
+  "cls": "Crypto"
+ },
+ {
+  "id": "AAPL",
+  "ticker": "KXAAPLPERP1",
+  "title": "AAPL",
+  "cls": "Equities"
+ },
+ {
+  "id": "ABBV",
+  "ticker": "KXABBVPERP1",
+  "title": "ABBV",
+  "cls": "Equities"
+ },
+ {
+  "id": "ABT",
+  "ticker": "KXABTPERP1",
+  "title": "ABT",
+  "cls": "Equities"
+ },
+ {
+  "id": "ACN",
+  "ticker": "KXACNPERP1",
+  "title": "ACN",
+  "cls": "Equities"
+ },
+ {
+  "id": "ADBE",
+  "ticker": "KXADBEPERP1",
+  "title": "ADBE",
+  "cls": "Equities"
+ },
+ {
+  "id": "ADI",
+  "ticker": "KXADIPERP1",
+  "title": "ADI",
+  "cls": "Equities"
+ },
+ {
+  "id": "ADP",
+  "ticker": "KXADPPERP1",
+  "title": "ADP",
+  "cls": "Equities"
+ },
+ {
+  "id": "AMAT",
+  "ticker": "KXAMATPERP1",
+  "title": "AMAT",
+  "cls": "Equities"
+ },
+ {
+  "id": "AMD",
+  "ticker": "KXAMDPERP1",
+  "title": "AMD",
+  "cls": "Equities"
+ },
+ {
+  "id": "AMGN",
+  "ticker": "KXAMGNPERP1",
+  "title": "AMGN",
+  "cls": "Equities"
+ },
+ {
+  "id": "AMZN",
+  "ticker": "KXAMZNPERP1",
+  "title": "AMZN",
+  "cls": "Equities"
+ },
+ {
+  "id": "ANET",
+  "ticker": "KXANETPERP1",
+  "title": "ANET",
+  "cls": "Equities"
+ },
+ {
+  "id": "ANT",
+  "ticker": "KXANTPERP1",
+  "title": "ANT",
+  "cls": "Equities"
+ },
+ {
+  "id": "APH",
+  "ticker": "KXAPHPERP1",
+  "title": "APH",
+  "cls": "Equities"
+ },
+ {
+  "id": "APP",
+  "ticker": "KXAPPPERP1",
+  "title": "APP",
+  "cls": "Equities"
+ },
+ {
+  "id": "ARM",
+  "ticker": "KXARMPERP1",
+  "title": "ARM",
+  "cls": "Equities"
+ },
+ {
+  "id": "ASML",
+  "ticker": "KXASMLPERP1",
+  "title": "ASML",
+  "cls": "Equities"
+ },
+ {
+  "id": "AVGO",
+  "ticker": "KXAVGOPERP1",
+  "title": "AVGO",
+  "cls": "Equities"
+ },
+ {
+  "id": "AXP",
+  "ticker": "KXAXPPERP1",
+  "title": "AXP",
+  "cls": "Equities"
+ },
+ {
+  "id": "BA",
+  "ticker": "KXBAPERP1",
+  "title": "BA",
+  "cls": "Equities"
+ },
+ {
+  "id": "BABA",
+  "ticker": "KXBABAPERP1",
+  "title": "BABA",
+  "cls": "Equities"
+ },
+ {
+  "id": "BAC",
+  "ticker": "KXBACPERP1",
+  "title": "BAC",
+  "cls": "Equities"
+ },
+ {
+  "id": "BKNG",
+  "ticker": "KXBKNGPERP1",
+  "title": "BKNG",
+  "cls": "Equities"
+ },
+ {
+  "id": "BLK",
+  "ticker": "KXBLKPERP1",
+  "title": "BLK",
+  "cls": "Equities"
+ },
+ {
+  "id": "BRKB",
+  "ticker": "KXBRKBPERP1",
+  "title": "BRKB",
+  "cls": "Equities"
+ },
+ {
+  "id": "C",
+  "ticker": "KXCPERP1",
+  "title": "C",
+  "cls": "Equities"
+ },
+ {
+  "id": "CAT",
+  "ticker": "KXCATPERP1",
+  "title": "CAT",
+  "cls": "Equities"
+ },
+ {
+  "id": "COP",
+  "ticker": "KXCOPPERP1",
+  "title": "COP",
+  "cls": "Equities"
+ },
+ {
+  "id": "COST",
+  "ticker": "KXCOSTPERP1",
+  "title": "COST",
+  "cls": "Equities"
+ },
+ {
+  "id": "CRM",
+  "ticker": "KXCRMPERP1",
+  "title": "CRM",
+  "cls": "Equities"
+ },
+ {
+  "id": "CRWD",
+  "ticker": "KXCRWDPERP1",
+  "title": "CRWD",
+  "cls": "Equities"
+ },
+ {
+  "id": "CSCO",
+  "ticker": "KXCSCOPERP1",
+  "title": "CSCO",
+  "cls": "Equities"
+ },
+ {
+  "id": "CVX",
+  "ticker": "KXCVXPERP1",
+  "title": "CVX",
+  "cls": "Equities"
+ },
+ {
+  "id": "DE",
+  "ticker": "KXDEPERP1",
+  "title": "DE",
+  "cls": "Equities"
+ },
+ {
+  "id": "DELL",
+  "ticker": "KXDELLPERP1",
+  "title": "DELL",
+  "cls": "Equities"
+ },
+ {
+  "id": "DHR",
+  "ticker": "KXDHRPERP1",
+  "title": "DHR",
+  "cls": "Equities"
+ },
+ {
+  "id": "DIS",
+  "ticker": "KXDISPERP1",
+  "title": "DIS",
+  "cls": "Equities"
+ },
+ {
+  "id": "ETN",
+  "ticker": "KXETNPERP1",
+  "title": "ETN",
+  "cls": "Equities"
+ },
+ {
+  "id": "GE",
+  "ticker": "KXGEPERP1",
+  "title": "GE",
+  "cls": "Equities"
+ },
+ {
+  "id": "GEV",
+  "ticker": "KXGEVPERP1",
+  "title": "GEV",
+  "cls": "Equities"
+ },
+ {
+  "id": "GILD",
+  "ticker": "KXGILDPERP1",
+  "title": "GILD",
+  "cls": "Equities"
+ },
+ {
+  "id": "GOOGL",
+  "ticker": "KXGOOGLPERP1",
+  "title": "GOOGL",
+  "cls": "Equities"
+ },
+ {
+  "id": "GS",
+  "ticker": "KXGSPERP1",
+  "title": "GS",
+  "cls": "Equities"
+ },
+ {
+  "id": "HD",
+  "ticker": "KXHDPERP1",
+  "title": "HD",
+  "cls": "Equities"
+ },
+ {
+  "id": "IBM",
+  "ticker": "KXIBMPERP1",
+  "title": "IBM",
+  "cls": "Equities"
+ },
+ {
+  "id": "INTC",
+  "ticker": "KXINTCPERP1",
+  "title": "INTC",
+  "cls": "Equities"
+ },
+ {
+  "id": "ISRG",
+  "ticker": "KXISRGPERP1",
+  "title": "ISRG",
+  "cls": "Equities"
+ },
+ {
+  "id": "JNJ",
+  "ticker": "KXJNJPERP1",
+  "title": "JNJ",
+  "cls": "Equities"
+ },
+ {
+  "id": "JPM",
+  "ticker": "KXJPMPERP1",
+  "title": "JPM",
+  "cls": "Equities"
+ },
+ {
+  "id": "KLAC",
+  "ticker": "KXKLACPERP1",
+  "title": "KLAC",
+  "cls": "Equities"
+ },
+ {
+  "id": "KO",
+  "ticker": "KXKOPERP1",
+  "title": "KO",
+  "cls": "Equities"
+ },
+ {
+  "id": "LIN",
+  "ticker": "KXLINPERP1",
+  "title": "LIN",
+  "cls": "Equities"
+ },
+ {
+  "id": "LLY",
+  "ticker": "KXLLYPERP1",
+  "title": "LLY",
+  "cls": "Equities"
+ },
+ {
+  "id": "LMT",
+  "ticker": "KXLMTPERP1",
+  "title": "LMT",
+  "cls": "Equities"
+ },
+ {
+  "id": "LRCX",
+  "ticker": "KXLRCXPERP1",
+  "title": "LRCX",
+  "cls": "Equities"
+ },
+ {
+  "id": "MA",
+  "ticker": "KXMAPERP1",
+  "title": "MA",
+  "cls": "Equities"
+ },
+ {
+  "id": "MAR",
+  "ticker": "KXMARPERP1",
+  "title": "MAR",
+  "cls": "Equities"
+ },
+ {
+  "id": "MCD",
+  "ticker": "KXMCDPERP1",
+  "title": "MCD",
+  "cls": "Equities"
+ },
+ {
+  "id": "META",
+  "ticker": "KXMETAPERP1",
+  "title": "META",
+  "cls": "Equities"
+ },
+ {
+  "id": "MRK",
+  "ticker": "KXMRKPERP1",
+  "title": "MRK",
+  "cls": "Equities"
+ },
+ {
+  "id": "MRVL",
+  "ticker": "KXMRVLPERP1",
+  "title": "MRVL",
+  "cls": "Equities"
+ },
+ {
+  "id": "MS",
+  "ticker": "KXMSPERP1",
+  "title": "MS",
+  "cls": "Equities"
+ },
+ {
+  "id": "MSFT",
+  "ticker": "KXMSFTPERP1",
+  "title": "MSFT",
+  "cls": "Equities"
+ },
+ {
+  "id": "MU",
+  "ticker": "KXMUPERP1",
+  "title": "MU",
+  "cls": "Equities"
+ },
+ {
+  "id": "NEE",
+  "ticker": "KXNEEPERP1",
+  "title": "NEE",
+  "cls": "Equities"
+ },
+ {
+  "id": "NEM",
+  "ticker": "KXNEMPERP1",
+  "title": "NEM",
+  "cls": "Equities"
+ },
+ {
+  "id": "NFLX",
+  "ticker": "KXNFLXPERP1",
+  "title": "NFLX",
+  "cls": "Equities"
+ },
+ {
+  "id": "NOW",
+  "ticker": "KXNOWPERP1",
+  "title": "NOW",
+  "cls": "Equities"
+ },
+ {
+  "id": "NVDA",
+  "ticker": "KXNVDAPERP1",
+  "title": "NVDA",
+  "cls": "Equities"
+ },
+ {
+  "id": "ORCL",
+  "ticker": "KXORCLPERP1",
+  "title": "ORCL",
+  "cls": "Equities"
+ },
+ {
+  "id": "PANW",
+  "ticker": "KXPANWPERP1",
+  "title": "PANW",
+  "cls": "Equities"
+ },
+ {
+  "id": "PEP",
+  "ticker": "KXPEPPERP1",
+  "title": "PEP",
+  "cls": "Equities"
+ },
+ {
+  "id": "PFE",
+  "ticker": "KXPFEPERP1",
+  "title": "PFE",
+  "cls": "Equities"
+ },
+ {
+  "id": "PG",
+  "ticker": "KXPGPERP1",
+  "title": "PG",
+  "cls": "Equities"
+ },
+ {
+  "id": "PLD",
+  "ticker": "KXPLDPERP1",
+  "title": "PLD",
+  "cls": "Equities"
+ },
+ {
+  "id": "PLTR",
+  "ticker": "KXPLTRPERP1",
+  "title": "PLTR",
+  "cls": "Equities"
+ },
+ {
+  "id": "PM",
+  "ticker": "KXPMPERP1",
+  "title": "PM",
+  "cls": "Equities"
+ },
+ {
+  "id": "QCOM",
+  "ticker": "KXQCOMPERP1",
+  "title": "QCOM",
+  "cls": "Equities"
+ },
+ {
+  "id": "QQQ",
+  "ticker": "KXQQQPERP1",
+  "title": "QQQ",
+  "cls": "Equities"
+ },
+ {
+  "id": "RTX",
+  "ticker": "KXRTXPERP1",
+  "title": "RTX",
+  "cls": "Equities"
+ },
+ {
+  "id": "SBUX",
+  "ticker": "KXSBUXPERP1",
+  "title": "SBUX",
+  "cls": "Equities"
+ },
+ {
+  "id": "SCHW",
+  "ticker": "KXSCHWPERP1",
+  "title": "SCHW",
+  "cls": "Equities"
+ },
+ {
+  "id": "SHOP",
+  "ticker": "KXSHOPPERP1",
+  "title": "SHOP",
+  "cls": "Equities"
+ },
+ {
+  "id": "SKHY",
+  "ticker": "KXSKHYPERP1",
+  "title": "SKHY",
+  "cls": "Equities"
+ },
+ {
+  "id": "SNDK",
+  "ticker": "KXSNDKPERP1",
+  "title": "SNDK",
+  "cls": "Equities"
+ },
+ {
+  "id": "SPCX",
+  "ticker": "KXSPCXPERP1",
+  "title": "SPCX",
+  "cls": "Equities"
+ },
+ {
+  "id": "SPY",
+  "ticker": "KXSPYPERP1",
+  "title": "SPY",
+  "cls": "Equities"
+ },
+ {
+  "id": "STX",
+  "ticker": "KXSTXPERP1",
+  "title": "STX",
+  "cls": "Equities"
+ },
+ {
+  "id": "TJX",
+  "ticker": "KXTJXPERP1",
+  "title": "TJX",
+  "cls": "Equities"
+ },
+ {
+  "id": "TMO",
+  "ticker": "KXTMOPERP1",
+  "title": "TMO",
+  "cls": "Equities"
+ },
+ {
+  "id": "TMUS",
+  "ticker": "KXTMUSPERP1",
+  "title": "TMUS",
+  "cls": "Equities"
+ },
+ {
+  "id": "TSLA",
+  "ticker": "KXTSLAPERP1",
+  "title": "TSLA",
+  "cls": "Equities"
+ },
+ {
+  "id": "TSM",
+  "ticker": "KXTSMPERP1",
+  "title": "TSM",
+  "cls": "Equities"
+ },
+ {
+  "id": "TXN",
+  "ticker": "KXTXNPERP1",
+  "title": "TXN",
+  "cls": "Equities"
+ },
+ {
+  "id": "UBER",
+  "ticker": "KXUBERPERP1",
+  "title": "UBER",
+  "cls": "Equities"
+ },
+ {
+  "id": "UNH",
+  "ticker": "KXUNHPERP1",
+  "title": "UNH",
+  "cls": "Equities"
+ },
+ {
+  "id": "UNP",
+  "ticker": "KXUNPPERP1",
+  "title": "UNP",
+  "cls": "Equities"
+ },
+ {
+  "id": "V",
+  "ticker": "KXVPERP1",
+  "title": "V",
+  "cls": "Equities"
+ },
+ {
+  "id": "VZ",
+  "ticker": "KXVZPERP1",
+  "title": "VZ",
+  "cls": "Equities"
+ },
+ {
+  "id": "WDC",
+  "ticker": "KXWDCPERP1",
+  "title": "WDC",
+  "cls": "Equities"
+ },
+ {
+  "id": "WELL",
+  "ticker": "KXWELLPERP1",
+  "title": "WELL",
+  "cls": "Equities"
+ },
+ {
+  "id": "WFC",
+  "ticker": "KXWFCPERP1",
+  "title": "WFC",
+  "cls": "Equities"
+ },
+ {
+  "id": "WMT",
+  "ticker": "KXWMTPERP1",
+  "title": "WMT",
+  "cls": "Equities"
+ },
+ {
+  "id": "XOM",
+  "ticker": "KXXOMPERP1",
+  "title": "XOM",
+  "cls": "Equities"
+ },
+ {
+  "id": "AUDUSD",
+  "ticker": "KXAUDUSDPERP1",
+  "title": "AUD/USD FX",
+  "cls": "FX"
+ },
+ {
+  "id": "EURCHF",
+  "ticker": "KXEURCHFPERP1",
+  "title": "EUR/CHF FX",
+  "cls": "FX"
+ },
+ {
+  "id": "EURUSD",
+  "ticker": "KXEURUSDPERP1",
+  "title": "EUR/USD FX",
+  "cls": "FX"
+ },
+ {
+  "id": "GBPUSD",
+  "ticker": "KXGBPUSDPERP1",
+  "title": "GBP/USD FX",
+  "cls": "FX"
+ },
+ {
+  "id": "USDCAD",
+  "ticker": "KXUSDCADPERP1",
+  "title": "USD/CAD FX",
+  "cls": "FX"
+ },
+ {
+  "id": "USDJPY",
+  "ticker": "KXUSDJPYPERP1",
+  "title": "USD/JPY FX",
+  "cls": "FX"
+ },
+ {
+  "id": "H100",
+  "ticker": "KXH100PERP1",
+  "title": "H100 SXM GPU Hour",
+  "cls": "GPU"
+ },
+ {
+  "id": "CHINA",
+  "ticker": "KXCHINAPERP1",
+  "title": "CHINA",
+  "cls": "Indices"
+ },
+ {
+  "id": "GERMANY",
+  "ticker": "KXGERMANYPERP1",
+  "title": "GERMANY",
+  "cls": "Indices"
+ },
+ {
+  "id": "US2000",
+  "ticker": "KXUS2000PERP1",
+  "title": "US2000",
+  "cls": "Indices"
+ },
+ {
+  "id": "US500",
+  "ticker": "KXUS500PERP1",
+  "title": "US500",
+  "cls": "Indices"
+ },
+ {
+  "id": "USTECH100",
+  "ticker": "KXUSTECH100PERP1",
+  "title": "USTECH100",
+  "cls": "Indices"
+ },
+ {
+  "id": "ALUMINUM",
+  "ticker": "KXALUMINUMPERP1",
+  "title": "Aluminum",
+  "cls": "Metals"
+ },
+ {
+  "id": "COPPER",
+  "ticker": "KXCOPPERPERP1",
+  "title": "Copper",
+  "cls": "Metals"
+ },
+ {
+  "id": "GOLD",
+  "ticker": "KXGOLDPERP1",
+  "title": "Gold",
+  "cls": "Metals"
+ },
+ {
+  "id": "PALLADIUM",
+  "ticker": "KXPALLADIUMPERP1",
+  "title": "Palladium",
+  "cls": "Metals"
+ },
+ {
+  "id": "PLATINUM",
+  "ticker": "KXPLATINUMPERP1",
+  "title": "Platinum",
+  "cls": "Metals"
+ },
+ {
+  "id": "SILVER",
+  "ticker": "KXSILVERPERP1",
+  "title": "Silver",
+  "cls": "Metals"
+ }
+]

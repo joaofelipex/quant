@@ -1,7 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService, errMsg } from '../core/api.service';
-import { ASSETS } from '../core/assets';
+import { Market, MarketsService } from '../core/markets.service';
 import { AuthService } from '../core/auth.service';
 import { runAction } from '../core/action';
 import { SettingsResponse } from '../core/models';
@@ -83,17 +83,30 @@ const LABEL: Record<Key, string> = {
 
     <section class="card mt">
       <div class="card-h">
-        <div><h2>Ativos</h2><div class="sub">cada ativo marcado ganha o próprio runner, posição, stop e limite de perda (só Kalshi demo)</div></div>
-        <div class="row"><button class="btn sm" [disabled]="!auth.canOperate()" (click)="pickAll()">Todos</button>
-          <button class="btn sm ghost" [disabled]="!auth.canOperate()" (click)="pickNone()">Nenhum</button></div>
+        <div><h2>Ativos ({{ picked().size }} de {{ markets.markets().length }})</h2>
+          <div class="sub">cada ativo marcado ganha o próprio runner, posição, stop e limite de perda (só Kalshi demo)</div></div>
+        <div class="row">
+          <button class="btn sm" [disabled]="!auth.canOperate()" (click)="pickCrypto()">Cripto da Binance (20)</button>
+          <button class="btn sm" [disabled]="!auth.canOperate()" (click)="pickEverything()">Tudo ({{ markets.markets().length }})</button>
+          <button class="btn sm ghost" [disabled]="!auth.canOperate()" (click)="pickNone()">Limpar</button>
+        </div>
       </div>
-      <div class="flex flex-wrap gap-2">
-        @for (a of assetList; track a) {
-          <button type="button" class="btn sm" [class.primary]="picked().has(a)" [disabled]="!auth.canOperate()" (click)="toggle(a)"
-                  [attr.aria-pressed]="picked().has(a)">{{ a }}</button>
-        }
-      </div>
-      <p class="note mt">{{ picked().size ? picked().size + ' ativo(s): a "Quantidade" acima é ignorada e cada entrada vale ~' + (form()['QUANT_NOTIONAL'] || '25') + ' USD.' : 'Nenhum marcado: o runner opera um ativo só (o do modo antigo, com a Quantidade acima).' }}</p>
+      <input class="mb-3" type="search" placeholder="buscar ativo (ex.: NVDA, ouro, euro)" [ngModel]="query()" (ngModelChange)="query.set($event)" name="q">
+      @for (g of visibleGroups(); track g.cls) {
+        <div class="mb-3">
+          <div class="spread mb-1"><b class="text-[13px] text-mute">{{ g.label }} ({{ g.items.length }})</b>
+            <button class="btn ghost sm" [disabled]="!auth.canOperate()" (click)="toggleGroup(g.items)">{{ allPicked(g.items) ? 'desmarcar' : 'marcar' }} todos</button></div>
+          <div class="flex flex-wrap gap-1.5">
+            @for (m of g.items; track m.id) {
+              <button type="button" class="btn sm" [class.primary]="picked().has(m.id)" [disabled]="!auth.canOperate()" [title]="m.title"
+                      (click)="toggle(m.id)" [attr.aria-pressed]="picked().has(m.id)">{{ m.id }}</button>
+            }
+          </div>
+        </div>
+      } @empty { <p class="note">Nenhum ativo encontrado.</p> }
+      <p class="note mt">{{ picked().size ? picked().size + ' ativo(s): a "Quantidade" acima é ignorada e cada entrada vale ~' + (form()['QUANT_NOTIONAL'] || '25') + ' USD.' : 'Nenhum marcado: o runner opera um ativo só (o do modo antigo, com a Quantidade acima).' }}
+        Cripto usa preços da Binance; os demais (ações, câmbio, metais…) usam as velas da própria Kalshi. Com muitos ativos, o 1m
+        gasta bastante da API: prefira 5m ou 15m.</p>
       <div class="grid cols-3 mt">
         <label class="field"><span>Valor por entrada (USD)</span>
           <input inputmode="decimal" [ngModel]="form()['QUANT_NOTIONAL']" (ngModelChange)="set('QUANT_NOTIONAL', $event)">
@@ -138,7 +151,8 @@ export class OperatePage {
   protected readonly form = signal<Record<string, string>>({});
   private readonly initial = signal<Record<string, string>>({});
   protected readonly busy = signal(false);
-  protected readonly assetList = ASSETS;
+  protected readonly markets = inject(MarketsService);
+  protected readonly query = signal('');
   protected readonly picked = computed(() => new Set((this.form()['QUANT_ASSETS'] ?? '').split(',').map(a => a.trim()).filter(Boolean)));
   protected readonly active = computed(() => this.store.data()?.service === 'active');
   protected readonly killed = computed(() => this.store.data()?.kill_file === true);
@@ -146,7 +160,7 @@ export class OperatePage {
   protected readonly venues = computed(() =>
     Object.entries(this.store.data()?.venues ?? {}).map(([name, v]) => ({ name, ...v })));
 
-  constructor() { this.load(); }
+  constructor() { this.load(); this.markets.load(); }
 
   protected opts(k: Key): string[] {
     const base = this.settings()?.options[k] ?? [];
@@ -166,12 +180,32 @@ export class OperatePage {
     });
   }
 
+  /** Grupos do catalogo filtrados pela busca (id ou nome). */
+  protected readonly visibleGroups = computed(() => {
+    const q = this.query().trim().toLowerCase();
+    return this.markets.groups()
+      .map(g => ({ ...g, items: g.items.filter(m => !q || m.id.toLowerCase().includes(q) || m.title.toLowerCase().includes(q)) }))
+      .filter(g => g.items.length);
+  });
+
+  private write(ids: Iterable<string>): void {
+    const s = new Set(ids);
+    this.set('QUANT_ASSETS', this.markets.ids().filter(x => s.has(x)).join(','));  // sempre na ordem do catalogo
+  }
   protected toggle(a: string): void {
     const s = new Set(this.picked());
     if (s.has(a)) s.delete(a); else s.add(a);
-    this.set('QUANT_ASSETS', ASSETS.filter(x => s.has(x)).join(','));
+    this.write(s);
   }
-  protected pickAll(): void { this.set('QUANT_ASSETS', ASSETS.join(',')); }
+  protected allPicked(items: Market[]): boolean { return items.every(m => this.picked().has(m.id)); }
+  protected toggleGroup(items: Market[]): void {
+    const s = new Set(this.picked());
+    const all = this.allPicked(items);
+    items.forEach(m => { if (all) s.delete(m.id); else s.add(m.id); });
+    this.write(s);
+  }
+  protected pickCrypto(): void { this.write(this.markets.binance()); }
+  protected pickEverything(): void { this.write(this.markets.ids()); }
   protected pickNone(): void { this.set('QUANT_ASSETS', ''); }
 
   protected set(k: Key, v: string): void { this.form.update(f => ({ ...f, [k]: v })); }

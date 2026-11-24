@@ -36,9 +36,9 @@ def validate(req: object) -> dict:
         raise OrderError(f"acao invalida: {action!r} ({' | '.join(ACTIONS)})")
     out: dict = {"id": str(req.get("id") or "")[:64], "action": action}
     if req.get("asset") not in (None, ""):
-        from .live.assets import CRYPTO
+        from .live.assets import CATALOG
 
-        if req["asset"] not in CRYPTO:
+        if req["asset"] not in CATALOG:
             raise OrderError(f"ativo invalido: {req['asset']!r}")
         out["asset"] = req["asset"]
     if action == "open":
@@ -223,7 +223,13 @@ def main(env=os.environ.get) -> int:
                 pass
         trades = env("QUANT_TRADES_LOG")
         symbol = assets.symbol(asset) if asset else env("QUANT_SYMBOL", "ETH/USDT:USDT")
-        out = execute(req, ex, price_fn=lambda: spot_price(symbol), kill_file=Path(env("QUANT_KILL_FILE", "KILL")),
+        if asset and not assets.uses_binance(asset):  # sem par na Binance: o preco de referencia e o da propria Kalshi
+            def price_fn() -> float:
+                return float(ex._market()["price"]) / ex.unit
+        else:
+            def price_fn() -> float:
+                return spot_price(symbol)
+        out = execute(req, ex, price_fn=price_fn, kill_file=Path(env("QUANT_KILL_FILE", "KILL")),
                       trades_path=Path(trades) if trades else None, save_basis=_save_basis_factory(state_path),
                       label=f"kalshi/testnet:{asset}" if asset else "kalshi/testnet")
     except OrderError as e:

@@ -104,6 +104,7 @@ class KalshiPerpsExecutor(Executor):
         self.tick = float(m["tick_size"])
         self.whole = not m.get("fractional_trading_enabled", False)
         self.min_qty = float(m["minimum_quantity"])
+        self.contract_price = float(m.get("price") or 0)  # 1 contrato agora; ordem minima = isto x min_qty
         self.market_version = int(m.get("market_version", 0))
 
     # ---- HTTP ---------------------------------------------------------------------------------------------------

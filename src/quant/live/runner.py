@@ -14,6 +14,7 @@ from __future__ import annotations
 import csv
 import json
 import logging
+import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -30,6 +31,12 @@ log = logging.getLogger("quant.live")
 SignalFn = Callable[[pd.DataFrame], pd.DataFrame]
 
 TRADE_FIELDS = ["ts", "origem", "side", "qty", "entrada", "saida", "pnl", "motivo"]
+def _px(x: float) -> str:
+    """Preco no CSV: 4 casas para precos normais; algarismos significativos para ativos baratos (0.0551)."""
+    return f"{x:.4f}" if abs(x) >= 1 else f"{x:.8g}"
+
+
+_TRADES_LOCK = threading.Lock()  # varios ativos (threads) acrescentam ao mesmo CSV
 RETRY_DELAY_S = 5.0  # apos erro num passo, tenta de novo logo (a barra ainda nao foi marcada como processada)
 
 
@@ -90,12 +97,14 @@ class Runner:
         if self.trades_path is None:
             return
         try:
-            new = not self.trades_path.exists()
-            with self.trades_path.open("a", newline="") as f:
-                w = csv.writer(f)
-                if new:
-                    w.writerow(TRADE_FIELDS)
-                w.writerow([str(ts), self.label, side, f"{qty:.6f}", f"{entry:.4f}", f"{exit_:.4f}", f"{pnl:.4f}", why])
+            with _TRADES_LOCK:
+                new = not self.trades_path.exists()
+                with self.trades_path.open("a", newline="") as f:
+                    w = csv.writer(f)
+                    if new:
+                        w.writerow(TRADE_FIELDS)
+                    w.writerow([str(ts), self.label, side, f"{qty:.6f}", _px(entry), _px(exit_), f"{pnl:.4f}",
+                                why])
         except OSError:
             log.exception("nao consegui gravar o historico de trades")
 
@@ -201,7 +210,8 @@ class Runner:
         if pos is not None and sig == -pos.side:
             self._close(float(last["close"]), now, "sinal oposto")
             pos, result = None, "saida_sinal"
-        if pos is None and sig != 0 and result == "ok":
+        atr_ok = float(row["atr"]) > 0  # mercado parado (atr 0/NaN) daria stop colado na entrada
+        if pos is None and sig != 0 and result == "ok" and atr_ok:
             ok, why = self.risk.check_entry(self._size(float(last["close"])), now, bar_close)
             if ok:
                 protected = self._enter(sig, float(last["close"]), float(row["atr"]), now)

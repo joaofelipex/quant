@@ -5,6 +5,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { describe, expect, it } from 'vitest';
 import { AuthService, Me } from '../core/auth.service';
+import { MarketsService } from '../core/markets.service';
 import { Status } from '../core/models';
 import { StatusStore } from '../core/status.store';
 import { AccountPage } from './account.page';
@@ -94,13 +95,27 @@ describe('telas de conta', () => {
       expect(t).toContain('travado');
     });
 
-    it('operar: marcar ativos monta a lista e Nenhum limpa', () => {
+    it('operar: lista os ativos do catalogo por classe e filtra pela busca', () => {
       TestBed.resetTestingModule();
-      const el = setup(OperatePage, 'operador', false, multi());
+      TestBed.configureTestingModule({
+        providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([]),
+          { provide: StatusStore, useValue: { data: signal(multi()), asset: signal(null), select: () => {}, banner: signal({ text: 'x', tone: 'ok' }), refresh: () => {} } }],
+      });
+      TestBed.inject(AuthService).me.set(me('operador'));
+      const mk = (id: string, title: string, cls: string, label: string, binance = false) => ({ id, ticker: `KX${id}PERP1`, title, cls, label, binance });
+      TestBed.inject(MarketsService).markets.set([mk('BTC', 'BTC', 'Crypto', 'Cripto', true), mk('NVDA', 'NVDA', 'Equities', 'Ações'),
+        mk('AAPL', 'AAPL', 'Equities', 'Ações'), mk('AUDUSD', 'AUD/USD FX', 'FX', 'Câmbio')]);
+      const f = TestBed.createComponent(OperatePage);
+      f.detectChanges();
+      const el = f.nativeElement as HTMLElement;
       const btn = (txt: string) => [...el.querySelectorAll('button')].find(b => b.textContent!.trim() === txt)!;
-      expect(btn('BTC')).toBeTruthy();
-      expect(btn('ZEC')).toBeTruthy();
+      expect(btn('NVDA')).toBeTruthy();
+      expect(btn('AAPL')).toBeTruthy();
+      expect(btn('AUDUSD')).toBeTruthy();
+      expect(el.textContent).toContain('Ações (2)');
+      expect(el.textContent).toContain('Câmbio (1)');
       expect(el.textContent).toContain('Valor por entrada (USD)');
+      expect(btn('Tudo (4)')).toBeTruthy();
     });
 
     it('boleta: com varios ativos pede ativo e valor em USD', () => {

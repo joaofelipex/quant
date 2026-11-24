@@ -1,4 +1,5 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ChartLine } from '../core/chart';
 import { dur, filterLog, fmt, hhmm, logTone, pct, TIMEFRAME_S, tone } from '../core/format';
@@ -17,7 +18,7 @@ interface PositionView { side: number; qty: number; entry: number }
 
 @Component({
   selector: 'app-overview',
-  imports: [Kpi, LineChart, PageHead, Icon, RouterLink],
+  imports: [Kpi, LineChart, PageHead, Icon, RouterLink, FormsModule],
   styles: `
     .hero{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;align-items:center}
     .hero h2{font-size:22px;margin:10px 0 8px}
@@ -59,10 +60,18 @@ interface PositionView { side: number; qty: number; entry: number }
               <div class="sub">{{ openCount() }} posição(ões) aberta(s) · PnL do dia somado
                 <b class="num" [class]="tone(totalPnl())">{{ fmt(totalPnl(), 4) }}</b> · clique num ativo para ver o gráfico dele</div></div>
           </div>
-          <div class="scroll-x"><table>
+          @if (d.assets!.length > 8) {
+            <div class="row mb-3">
+              <input class="!w-64" type="search" placeholder="filtrar (ex.: NVDA)" [ngModel]="filter()" (ngModelChange)="filter.set($event)" name="f">
+              <label class="flex cursor-pointer items-center gap-2 text-[13.5px] text-mute"><input class="w-auto" type="checkbox"
+                [ngModel]="onlyOpen()" (ngModelChange)="onlyOpen.set($event)" name="o"> só com posição ou travados</label>
+              <span class="sub">{{ rows().length }} de {{ d.assets!.length }}</span>
+            </div>
+          }
+          <div class="scroll-x max-h-[420px] overflow-y-auto"><table>
             <thead><tr><th>Ativo</th><th>Posição</th><th class="r">PnL do dia</th><th class="r">Trades</th><th>Última barra</th><th>Estado</th></tr></thead>
             <tbody>
-              @for (a of d.assets!; track a.asset) {
+              @for (a of rows(); track a.asset) {
                 <tr class="cursor-pointer" [class.bg-accent-soft]="a.asset === d.asset" (click)="store.select(a.asset)" tabindex="0" (keydown.enter)="store.select(a.asset)">
                   <td><b>{{ a.asset }}</b></td>
                   <td>@if (a.position) { <span class="pill" [class]="a.position.side > 0 ? 'ok' : 'bad'">{{ a.position.side > 0 ? 'LONG' : 'SHORT' }}</span> <span class="sub num">@ {{ fmt(a.position.price) }}</span> } @else { <span class="sub">—</span> }</td>
@@ -147,6 +156,12 @@ export class OverviewPage {
   protected readonly tone = tone;
   protected readonly logTone = logTone;
 
+  protected readonly filter = signal('');
+  protected readonly onlyOpen = signal(false);
+  protected readonly rows = computed(() => {
+    const q = this.filter().trim().toLowerCase();
+    return (this.d()?.assets ?? []).filter(a => (!q || a.asset.toLowerCase().includes(q)) && (!this.onlyOpen() || a.position || a.halted));
+  });
   protected readonly openCount = computed(() => (this.d()?.assets ?? []).filter(a => a.position).length);
   protected readonly totalPnl = computed(() => (this.d()?.assets ?? []).reduce((s, a) => s + a.pnl, 0));
   protected readonly cfg = computed(() => this.d()?.config ?? {});

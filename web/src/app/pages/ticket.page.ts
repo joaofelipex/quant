@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { filter, switchMap, take, timeout, timer } from 'rxjs';
 import { ApiService, errMsg } from '../core/api.service';
-import { ASSETS } from '../core/assets';
+import { MarketsService } from '../core/markets.service';
 import { AuthService } from '../core/auth.service';
 import { fmt, tone } from '../core/format';
 import { OrderRequest, OrderResult, Tone } from '../core/models';
@@ -66,8 +66,8 @@ const MAX_USD = 200;
           @if (multi()) {
             <label class="field"><span>Ativo e valor (USD)</span>
               <div class="flex gap-2">
-                <select class="!w-28" name="asset" [ngModel]="asset()" (ngModelChange)="pick($event)">
-                  @for (a of assetNames(); track a) { <option [value]="a">{{ a }}</option> }
+                <select class="!w-56" name="asset" [ngModel]="asset()" (ngModelChange)="pick($event)">
+                  @for (a of assetNames(); track a) { <option [value]="a">{{ a }} · {{ markets.title(a) }}</option> }
                 </select>
                 <input type="number" inputmode="decimal" step="1" min="1" [max]="maxUsd" [ngModel]="usd()" (ngModelChange)="usd.set(+$event)" name="usd">
               </div>
@@ -131,7 +131,8 @@ export class TicketPage {
   protected readonly usdPresets = [10, 25, 50, 100];
   protected readonly usd = signal(25);
   protected readonly asset = signal('');
-  protected readonly assetNames = computed(() => (this.store.data()?.assets ?? []).map(a => a.asset).filter(a => (ASSETS as readonly string[]).includes(a)));
+  protected readonly assetNames = computed(() => (this.store.data()?.assets ?? []).map(a => a.asset));
+  protected readonly markets = inject(MarketsService);
   protected readonly multi = computed(() => this.assetNames().length > 0);
   protected readonly fmt = fmt;
   protected readonly qty = signal(0.01);
@@ -159,6 +160,7 @@ export class TicketPage {
   protected readonly stopTone = computed<Tone>(() => { const p = this.pos(); return !p ? '' : p.stop ? 'ok' : 'bad'; });
 
   constructor() {
+    this.markets.load();
     // espera o primeiro status para saber se ha varios ativos; so entao consulta a posicao
     let started = false;
     effect(() => {

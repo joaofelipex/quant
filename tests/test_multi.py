@@ -1,6 +1,7 @@
 """Varios ativos: registro, MultiRunner, tamanho por valor, status por ativo, configuracao e ordem manual por ativo."""
 import json
 import logging
+from pathlib import Path
 from types import SimpleNamespace
 
 import pandas as pd
@@ -18,21 +19,32 @@ class TestAssets:
     def test_parse(self):
         assert assets.parse("btc, eth,BTC") == ["BTC", "ETH"]
         assert assets.parse("") == [] and assets.parse("todos") == list(assets.CRYPTO)
+        assert assets.parse("nvda,AAPL") == ["NVDA", "AAPL"]
+        assert assets.parse("tudo") == list(assets.ALL) and len(assets.ALL) > 100
 
-    @pytest.mark.parametrize("bad", ["XYZ", "BTC,FOO", "KXETHPERP1", "C", "CVX"])
-    def test_parse_recusa_desconhecido_e_acoes(self, bad):
+    @pytest.mark.parametrize("bad", ["XYZ", "BTC,FOO", "KXETHPERP1", "1", "BTC;ETH"])
+    def test_parse_recusa_desconhecido(self, bad):
         with pytest.raises(ValueError):
             assets.parse(bad)
 
-    def test_nomes(self):
-        assert assets.symbol("BTC") == "BTC/USDT:USDT" and assets.ticker("SOL") == "KXSOLPERP1"
+    def test_catalogo_cobre_acoes_cambio_metais_e_os_20_cripto(self):
+        classes = {r["cls"] for r in assets.rows()}
+        assert {"Equities", "Crypto", "FX", "Metals", "Indices"} <= classes
+        assert {"NVDA", "AAPL", "AUDUSD"} <= set(assets.ALL) and set(assets.CRYPTO) <= set(assets.ALL)
+        assert all(r["ticker"] == f"KX{r['id']}PERP1" for r in assets.rows())
+
+    def test_feed_da_binance_so_para_os_20_cripto(self):
+        assert assets.uses_binance("BTC") and not assets.uses_binance("NVDA") and not assets.uses_binance("C")
+        assert assets.symbol("BTC") == "BTC/USDT:USDT" and assets.ticker("NVDA") == "KXNVDAPERP1"
         assert len(set(assets.CRYPTO)) == len(assets.CRYPTO) == 20
 
 
 class FakeRunner:
-    def __init__(self, result="ok", pnl=0.0, bar_s=60, boom=False):
-        self.result, self.bar_s, self.boom, self.pnl, self.calls = result, bar_s, boom, pnl, 0
+    def __init__(self, result="ok", pnl=0.0, bar_s=60, boom=False, kill_file=None):
+        self.result, self.bar_s, self.boom, self.calls = result, bar_s, boom, 0
+        self.kill_file = kill_file or Path("/nao/existe/KILL")
         self.risk = RiskManager(RiskLimits(max_qty=1e9, max_daily_loss=1e9))
+        self.risk._pnl = pnl
 
     def step(self):
         self.calls += 1
@@ -40,58 +52,92 @@ class FakeRunner:
             raise OSError("rede")
         return self.result
 
-    @property
-    def risk_state(self):
-        return self.risk.state()
 
+class Clock:
+    def __init__(self, t=1_000_000.0):
+        self.t = t
 
-def with_pnl(r, pnl):
-    r.risk._pnl = pnl
-    return r
+    def __call__(self):
+        return self.t
+
+    def sleep(self, s):
+        self.t += s
 
 
 class TestMulti:
     def test_um_ativo_com_erro_nao_para_os_outros(self, caplog):
         a, b = FakeRunner(boom=True), FakeRunner("entrada")
         with caplog.at_level(logging.ERROR):
-            res = MultiRunner({"A": a, "B": b}).step_all()
+            res = MultiRunner({"A": a, "B": b}, clock=Clock()).step_due()
         assert res == {"A": "erro", "B": "entrada"} and b.calls == 1 and "A" in caplog.text
 
+    def test_cada_ativo_so_roda_na_sua_hora(self):
+        clock = Clock(1_000_020.0)
+        a, b = FakeRunner(bar_s=60), FakeRunner(bar_s=300)
+        m = MultiRunner({"A": a, "B": b}, clock=clock)
+        assert set(m.step_due()) == {"A", "B"}
+        assert m.due["A"] == pytest.approx(1_000_020.0 - 1_000_020.0 % 60 + 60 + 2)
+        assert m.due["B"] == pytest.approx(1_000_020.0 - 1_000_020.0 % 300 + 300 + 2)
+        assert m.step_due() == {}  # ninguem venceu ainda
+        clock.t = m.due["A"]
+        assert set(m.step_due()) == {"A"} and b.calls == 1
+
+    def test_erro_repete_em_5s_so_para_o_ativo_com_erro(self):
+        clock = Clock(1_000_000.0)
+        a, b = FakeRunner(boom=True), FakeRunner()
+        m = MultiRunner({"A": a, "B": b}, clock=clock)
+        m.step_due()
+        assert m.due["A"] == pytest.approx(1_000_005.0)
+        assert m.due["B"] == pytest.approx(1_000_022.0)  # proxima barra de 60 s + 2 s
+        clock.t = 1_000_006.0
+        assert set(m.step_due()) == {"A"}
+
+    def test_roda_em_paralelo(self):
+        import threading
+        import time as _t
+
+        vistos = set()
+
+        class Lento(FakeRunner):
+            def step(self):
+                vistos.add(threading.current_thread().name)
+                _t.sleep(0.05)
+                return "ok"
+
+        m = MultiRunner({f"A{i}": Lento() for i in range(8)}, workers=8, clock=Clock())
+        t0 = _t.time()
+        assert len(m.step_due()) == 8
+        assert _t.time() - t0 < 0.3 and len(vistos) > 1  # 8 x 50 ms em serie levaria 400 ms
+
     def test_perda_total_trava_entradas_de_todos(self):
-        a, b = with_pnl(FakeRunner(), -3.0), with_pnl(FakeRunner(), -2.5)
-        m = MultiRunner({"A": a, "B": b, "C": FakeRunner()}, max_total_loss=5.0)
+        a, b = FakeRunner(pnl=-3.0), FakeRunner(pnl=-2.5)
+        m = MultiRunner({"A": a, "B": b, "C": FakeRunner()}, max_total_loss=5.0, clock=Clock())
         assert m.total_pnl() == -5.5
-        m.step_all()
+        m.step_due()
         assert all(r.risk.halted for r in m.runners.values())
-        assert "TOTAL" not in a.risk.halt_reason and "perda total" in a.risk.halt_reason
+        assert "perda total" in a.risk.halt_reason
 
     def test_sem_limite_ou_abaixo_dele_nao_trava(self):
-        m = MultiRunner({"A": with_pnl(FakeRunner(), -1.0)}, max_total_loss=5.0)
-        m.step_all()
+        m = MultiRunner({"A": FakeRunner(pnl=-1.0)}, max_total_loss=5.0, clock=Clock())
+        m.step_due()
         assert not m.runners["A"].risk.halted
-        m2 = MultiRunner({"A": with_pnl(FakeRunner(), -999.0)})
-        m2.step_all()
+        m2 = MultiRunner({"A": FakeRunner(pnl=-999.0)}, clock=Clock())
+        m2.step_due()
         assert not m2.runners["A"].risk.halted
 
-    def test_run_encerra_quando_todos_dizem_kill(self):
-        m = MultiRunner({"A": FakeRunner("kill"), "B": FakeRunner("kill")},
-                        sleep=lambda s: pytest.fail("nao deve dormir"))
+    def test_kill_vence_a_agenda_e_encerra(self, tmp_path):
+        kf = tmp_path / "KILL"
+        kf.write_text("")
+        clock = Clock()
+        m = MultiRunner({"A": FakeRunner("kill", kill_file=kf), "B": FakeRunner("kill", kill_file=kf)},
+                        sleep=clock.sleep, clock=clock)
+        m.due = {"A": clock.t + 3600, "B": clock.t + 3600}  # longe no futuro: o kill nao espera
         m.run()
-
-    def test_run_repete_logo_apos_erro_e_espera_a_barra_depois(self):
-        a = FakeRunner()
-        pausas, passos = [], iter(["erro", "ok", "kill"])
-        a.step = lambda: (r := next(passos)) == "erro" and (_ for _ in ()).throw(OSError("x")) or r
-        m = MultiRunner({"A": a}, sleep=pausas.append, clock=lambda: 120.0)
-        m.run()
-        assert pausas[0] == 5.0 and pausas[1] == pytest.approx(62.0)  # erro: 5 s; ok: 2 s depois do fechamento
+        assert m.last == {"A": "kill", "B": "kill"}
 
     def test_sem_ativos_e_erro(self):
         with pytest.raises(ValueError):
             MultiRunner({})
-
-    def test_usa_a_menor_barra(self):
-        assert MultiRunner({"A": FakeRunner(bar_s=300), "B": FakeRunner(bar_s=60)}).bar_s == 60
 
 
 class FakeFeed:
@@ -162,24 +208,63 @@ class TestConfiguracoes:
                 control.write_runtime(p, bad)
 
 
+class FakeKalshiEx(PaperExecutor):
+    def __init__(self, contract_price=5.0, min_qty=1.0):
+        super().__init__()
+        self.contract_price, self.min_qty = contract_price, min_qty
+
+
 class TestBuildMulti:
-    ENV = {"QUANT_MODE": "testnet", "QUANT_VENUE": "kalshi", "QUANT_ASSETS": "BTC,ETH", "QUANT_NOTIONAL": "40",
+    ENV = {"QUANT_MODE": "testnet", "QUANT_VENUE": "kalshi", "QUANT_ASSETS": "BTC,NVDA", "QUANT_NOTIONAL": "40",
            "QUANT_TIMEFRAME": "1m", "QUANT_STATE": "/x/y/live_state.json", "QUANT_MAX_TOTAL_LOSS": "7",
            "QUANT_TRADES_LOG": "/x/trades.csv"}
 
     @pytest.fixture(autouse=True)
     def fakes(self, monkeypatch):
-        self.tickers = []
-        monkeypatch.setattr(config, "build_kalshi",
-                            lambda mode, env, ticker=None: self.tickers.append(ticker) or PaperExecutor())
-        monkeypatch.setattr(config, "build_feed", lambda *a, **k: FakeFeed())
+        self.tickers, self.kalshi_feeds, self.prices = [], [], {}
 
-    def test_monta_um_runner_por_ativo(self):
+        def build(mode, env, ticker=None):
+            self.tickers.append(ticker)
+            return FakeKalshiEx(self.prices.get(ticker, 5.0))
+
+        monkeypatch.setattr(config, "build_kalshi", build)
+        monkeypatch.setattr(config, "build_feed", lambda *a, **k: FakeFeed())
+        monkeypatch.setattr(config, "KalshiFeed", lambda tk, tf, env="demo": self.kalshi_feeds.append(tk) or FakeFeed())
+
+    def test_monta_um_runner_por_ativo_e_escolhe_o_feed(self):
         m = config.build_multi(self.ENV.get)
-        assert list(m.runners) == ["BTC", "ETH"] and self.tickers == ["KXBTCPERP1", "KXETHPERP1"]
+        assert list(m.runners) == ["BTC", "NVDA"] and self.tickers == ["KXBTCPERP1", "KXNVDAPERP1"]
+        assert self.kalshi_feeds == ["KXNVDAPERP1"]  # BTC usa a Binance; NVDA, as velas da Kalshi
         btc = m.runners["BTC"]
         assert btc.notional == 40.0 and btc.label == "kalshi/testnet:BTC" and m.max_total_loss == 7.0
         assert btc.state_path.name == "live_state.BTC.json" and str(btc.trades_path).endswith("trades.csv")
+
+    def test_pula_ativo_cujo_menor_contrato_passa_do_valor_por_entrada(self, caplog):
+        self.prices["KXNVDAPERP1"] = 90.0  # 1 contrato = 90 USD > 1,5 x 40
+        with caplog.at_level(logging.WARNING):
+            m = config.build_multi(self.ENV.get)
+        assert list(m.runners) == ["BTC"] and "NVDA fora" in caplog.text
+
+    def test_mercado_que_falha_nao_derruba_os_outros(self, monkeypatch, caplog):
+        original = config.build_kalshi
+
+        def build(mode, env, ticker=None):
+            if ticker == "KXBTCPERP1":
+                raise OSError("fora do ar")
+            return original(mode, env, ticker)
+
+        monkeypatch.setattr(config, "build_kalshi", build)
+        with caplog.at_level(logging.ERROR):
+            m = config.build_multi(self.ENV.get)
+        assert list(m.runners) == ["NVDA"] and "nao consegui preparar BTC" in caplog.text
+
+    def test_nenhum_ativo_possivel(self, monkeypatch):
+        def build(*a, **k):
+            raise OSError("x")
+
+        monkeypatch.setattr(config, "build_kalshi", build)
+        with pytest.raises(SystemExit, match="nenhum"):
+            config.build_multi(self.ENV.get)
 
     @pytest.mark.parametrize("over", [{"QUANT_VENUE": "binance"}, {"QUANT_MODE": "live"}, {"QUANT_MODE": "paper"}])
     def test_so_kalshi_demo(self, over):
@@ -232,3 +317,71 @@ class TestOrdemManualPorAtivo:
         r = manual.execute(manual.validate({"action": "open", "side": 1, "asset": "BTC", "usd": 30, "stop_pct": 1}), ex,
                            price_fn=lambda: 60_000.0, trades_path=None)
         assert r["ok"] and ex.qty == pytest.approx(30 / 60_000)
+
+
+class TestKalshiFeed:
+    """Velas da Kalshi -> barras no formato canonico, preco por unidade do ativo."""
+
+    MARKET = {"market": {"contract_size": "0.020000", "underlying_multiplier": "1.000000"}}
+
+    @staticmethod
+    def candle(end_ts, o, h, low, c, with_price=True):
+        base = {"end_period_ts": end_ts, "bid": {"open": str(o - 0.01), "high": str(h - 0.01), "low": str(low - 0.01),
+                                                 "close": str(c - 0.01)},
+                "ask": {"open": str(o + 0.01), "high": str(h + 0.01), "low": str(low + 0.01), "close": str(c + 0.01)}}
+        if with_price:
+            base["price"] = {"open": str(o), "high": str(h), "low": str(low), "close": str(c)}
+        return base
+
+    def feed(self, tf="1m", now=6_000_000, calls=None):
+        from quant.live.feed import KalshiFeed
+
+        def fetch(url):
+            if "candlesticks" not in url:
+                return self.MARKET
+            q = dict(kv.split("=") for kv in url.split("?")[1].split("&"))
+            if calls is not None:
+                calls.append(q)
+            per, start, end = int(q["period_interval"]) * 60, int(q["start_ts"]), int(q["end_ts"])
+            out = []
+            t = end - end % per
+            while t > start:  # uma vela por periodo: close = indice, para conferir ordem e agregacao
+                out.append(self.candle(t, 7.0, 7.1, 6.9, 7.0 + (t // per) % 10 / 100))
+                t -= per
+            return {"candlesticks": out[::-1]}
+
+        return KalshiFeed("KXAAPLPERP1", tf, now=lambda: now, fetch=fetch)
+
+    def test_precos_por_unidade_do_ativo_e_barras_fechadas(self):
+        df = self.feed().closed_bars(5)
+        assert list(df.columns) == ["datetime", "open", "high", "low", "close"] and len(df) == 5
+        assert df["open"].iloc[0] == pytest.approx(7.0 / 0.02)  # 7.0 por contrato de 0.02 -> 350 por unidade
+        assert df["datetime"].is_monotonic_increasing and df["datetime"].iloc[-1] < pd.Timestamp(6_000_000, unit="s")
+
+    def test_agrega_1m_em_5m_so_com_baldes_completos(self):
+        df = self.feed("5m").closed_bars(4)
+        assert len(df) == 4 and all(t.minute % 5 == 0 for t in df["datetime"])
+        assert df["high"].iloc[-1] == pytest.approx(7.1 / 0.02) and df["low"].iloc[-1] == pytest.approx(6.9 / 0.02)
+
+    def test_incremental_busca_so_o_que_falta(self):
+        calls: list = []
+        f = self.feed(calls=calls, now=6_000_000)
+        f.closed_bars(300)
+        antes = len(calls)
+        f.now = lambda: 6_000_060  # passou 1 minuto
+        f.closed_bars(300)
+        novas = calls[antes:]
+        assert len(novas) == 1 and int(novas[0]["end_ts"]) - int(novas[0]["start_ts"]) <= 180
+
+    def test_vela_sem_negocio_usa_o_meio_do_livro(self):
+        from quant.live.feed import KalshiFeed
+
+        f = KalshiFeed.__new__(KalshiFeed)
+        assert f._ohlc(self.candle(60, 7.0, 7.1, 6.9, 7.05, with_price=False)) == pytest.approx((7.0, 7.1, 6.9, 7.05))
+        assert f._ohlc({"end_period_ts": 60}) is None
+
+    def test_timeframe_invalido(self):
+        from quant.live.feed import KalshiFeed
+
+        with pytest.raises(ValueError, match="nao suportado"):
+            KalshiFeed("KXAAPLPERP1", "3m", fetch=lambda u: self.MARKET)

@@ -55,3 +55,81 @@ class PublicSpotFeed(Feed):
         for col, i in (("open", 1), ("high", 2), ("low", 3), ("close", 4)):
             df[col] = [float(r[i]) for r in raw]
         return df
+
+
+class KalshiFeed(Feed):
+    """Barras fechadas das velas PUBLICAS da Kalshi (sem chave): qualquer perpetuo (acoes, cambio, metais...).
+
+    Os precos saem POR UNIDADE do ativo (vela / ``contract_size * underlying_multiplier``), a mesma convencao do feed da
+    Binance, entao o executor e a estrategia nao percebem a diferenca. A Kalshi so tem velas de 1 e 60 min: 5m/15m saem
+    de agregar as de 1 min (so baldes completos). Cada chamada devolve ate 300 velas (janelas maiores vem em pedacos) e,
+    depois da primeira vez, so se busca o que falta (1 chamada por ciclo).
+    """
+
+    HOSTS = {"demo": "https://external-api.demo.kalshi.co", "prod": "https://api.elections.kalshi.com"}
+    CHUNK = 300  # velas por chamada
+    MINUTES = {"1m": 1, "5m": 5, "15m": 15, "1h": 60}
+
+    def __init__(self, ticker: str, timeframe: str = "1m", env: str = "demo", *, now=None, fetch=get_json):
+        if timeframe not in self.MINUTES:
+            raise ValueError(f"timeframe {timeframe!r} nao suportado pelo feed da Kalshi ({', '.join(self.MINUTES)})")
+        import time
+
+        self.ticker, self.timeframe, self.minutes = ticker, timeframe, self.MINUTES[timeframe]
+        self.base = f"{self.HOSTS[env]}/trade-api/v2/margin/markets/{ticker}"
+        self.now, self.fetch = now or time.time, fetch
+        self.rows: dict[int, tuple] = {}  # abertura (s) -> (o, h, l, c) das velas ja baixadas
+        m = self.fetch(self.base)["market"]
+        self.unit = float(m["contract_size"]) * float(m["underlying_multiplier"])
+
+    def _candles(self, period: int, start: int, end: int) -> list[dict]:
+        url = f"{self.base}/candlesticks?period_interval={period}&start_ts={start}&end_ts={end}"
+        return self.fetch(url).get("candlesticks", [])
+
+    def _ohlc(self, c: dict) -> tuple[float, float, float, float] | None:
+        p = c.get("price") or {}
+        if not all(p.get(k) not in (None, "") for k in ("open", "high", "low", "close")):
+            b, a = c.get("bid") or {}, c.get("ask") or {}  # sem negocio no minuto: usa o meio do livro
+            try:
+                mid = [(float(b[k]) + float(a[k])) / 2 for k in ("open", "high", "low", "close")]
+                return mid[0], mid[1], mid[2], mid[3]
+            except (KeyError, TypeError, ValueError):
+                return None
+        return float(p["open"]), float(p["high"]), float(p["low"]), float(p["close"])
+
+    def closed_bars(self, n: int) -> pd.DataFrame:
+        now = int(self.now())
+        native = self.minutes in (1, 60)
+        period = self.minutes if native else 1
+        step = period * 60
+        end = now - now % step  # so periodos ja encerrados
+        want = n if native else n * self.minutes + self.minutes  # velas de `period` min que precisamos
+        floor = end - want * step
+        # incremental: so busca o que falta depois da ultima vela guardada (1 chamada por ciclo em regime normal)
+        need_from = max(max(self.rows) - step, floor) if self.rows else floor
+        pos = end
+        while pos > need_from:
+            start = max(pos - self.CHUNK * step, need_from)
+            for c in self._candles(period, start, pos):
+                ohlc = self._ohlc(c)
+                if ohlc is not None and int(c["end_period_ts"]) <= end:
+                    self.rows[int(c["end_period_ts"]) - step] = ohlc  # chave = abertura da vela
+            pos = start
+        for k in [k for k in self.rows if k < floor]:
+            del self.rows[k]
+        if not self.rows:
+            return pd.DataFrame({"datetime": pd.to_datetime([]), "open": [], "high": [], "low": [], "close": []})
+        df = pd.DataFrame([(t, *v) for t, v in sorted(self.rows.items())],
+                          columns=["ts", "open", "high", "low", "close"])
+        if not native:
+            bucket = self.minutes * 60
+            df["b"] = df["ts"] // bucket * bucket
+            cnt = df.groupby("b")["ts"].transform("count")
+            df = df[(cnt == self.minutes) & (df["b"] + bucket <= end)]  # so baldes completos e ja fechados
+            df = df.groupby("b").agg(open=("open", "first"), high=("high", "max"), low=("low", "min"),
+                                     close=("close", "last")).reset_index().rename(columns={"b": "ts"})
+        df = df.tail(n)
+        out = pd.DataFrame({"datetime": pd.to_datetime(df["ts"], unit="s")})
+        for col in ("open", "high", "low", "close"):
+            out[col] = (df[col] / self.unit).to_numpy()
+        return out.reset_index(drop=True)

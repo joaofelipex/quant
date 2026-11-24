@@ -173,13 +173,16 @@ Depois de confirmar que o login funciona, desligue o basic auth do nginx **só**
 os blocos `/controle/` de `deploy/nginx-quant.conf` para `/etc/nginx/sites-available/quant.mixco.com.br`, `sudo nginx -t` e
 `sudo systemctl reload nginx`.
 
-**Vários ativos:** com `QUANT_ASSETS=BTC,ETH,SOL,...` (ou `todos`; escolha na aba Operar) o `quant-live` roda um runner por ativo no
-mesmo processo, só na Kalshi demo: BTC, ETH, SOL, XRP, BNB, DOGE, ADA, LINK, LTC, BCH, DOT, NEAR, UNI, AAVE, SUI, XLM, HBAR, HYPE, WLD e ZEC
-(perpétuos de cripto com barras públicas na Binance; ações e câmbio ficam de fora porque a estratégia usa o feed cripto). Cada ativo tem
-estado próprio (`live_state.<ATIVO>.json`), stop na corretora e limite de perda diária próprio; `QUANT_MAX_TOTAL_LOSS` trava as
-**entradas** de todos quando a soma do dia chega nele; o kill-switch fecha todos. Tamanho por valor: `QUANT_NOTIONAL` (USD por entrada,
-padrão 25) vira contratos inteiros de cada ativo. A Visão geral mostra a tabela de ativos; a Boleta passa a pedir ativo + valor em USD.
-Sem `QUANT_ASSETS` tudo funciona como antes (um ativo, `QUANT_QTY`).
+**Vários ativos:** com `QUANT_ASSETS=BTC,NVDA,AAPL,...` (ou `todos` = os 20 cripto da Binance, ou `tudo` = os 145 do catálogo; escolha
+por classe na aba Operar) o `quant-live` roda um runner por ativo no mesmo processo, só na Kalshi demo. O catálogo (`src/quant/live/catalog.json`,
+gerado por `scripts/gen_catalog.py`) tem os perpétuos `KX<ID>PERP1` ativos: ações (Nvidia, Apple...), cripto, câmbio, metais, índices e GPU.
+Preços: os 20 cripto da Binance usam as barras públicas dela; todos os outros usam as **velas públicas da própria Kalshi**
+(1 min e 1 h; 5m/15m são agregados das de 1 min; só se baixa o que falta, 1 chamada por ativo por ciclo). Cada ativo tem
+estado próprio (`live_state.<ATIVO>.json`), stop na corretora e limite de perda diária próprio; roda só quando a barra dele fecha,
+em paralelo (12 threads), e um erro num ativo repete só aquele. `QUANT_MAX_TOTAL_LOSS` trava as **entradas** de todos quando a soma do
+dia chega nele; o kill-switch fecha todos em ~1 s. Tamanho por valor: `QUANT_NOTIONAL` (USD por entrada, padrão 25) vira contratos
+inteiros de cada ativo; ativos cujo menor contrato passa de 1,5 x esse valor ficam de fora (com aviso no log). A Visão geral mostra a
+tabela de ativos (com filtro); a Boleta pede ativo + valor em USD. Sem `QUANT_ASSETS` tudo funciona como antes (um ativo, `QUANT_QTY`).
 
 **Boleta manual (Boleta):** comprar, vender, colocar stop e fechar a mão pelo painel, só na Kalshi **demo**. O painel não tem
 chave: ele grava um pedido validado e dispara `quant-order.service` (que tem a chave e recusa tudo que não seja `kalshi` +

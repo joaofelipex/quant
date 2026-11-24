@@ -3,18 +3,21 @@ from __future__ import annotations
 
 import logging
 import os
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from quant.strategies import trend_follow as tf
 
 from . import assets as assets_mod
 from .executor import BinanceFuturesExecutor, PaperExecutor
-from .feed import CcxtFeed, PublicSpotFeed
+from .feed import CcxtFeed, KalshiFeed, PublicSpotFeed
 from .kalshi import KalshiPerpsExecutor, load_private_key
 from .multi import MultiRunner
 from .polymarket import PolymarketPerpsExecutor, load_credentials
 from .risk import RiskLimits, RiskManager
 from .runner import Runner
+
+log = logging.getLogger("quant.live")
 
 
 def build_kalshi(mode: str, env=os.environ.get, ticker: str | None = None) -> KalshiPerpsExecutor:
@@ -105,14 +108,31 @@ def build_multi(env=os.environ.get) -> MultiRunner:
     def signals(bars):
         return tf.generate_signals(tf.add_indicators(bars), session_start="00:00", session_end="23:59")
 
-    runners = {}
-    for a in names:
-        risk = RiskManager(RiskLimits(max_qty=float("inf"), max_daily_loss=float(env("QUANT_MAX_DAILY_LOSS", "20"))))
-        runners[a] = Runner(build_feed(mode, assets_mod.symbol(a), tfm, kind, env("QUANT_FEED", "auto"), venue),
-                            build_kalshi(mode, env, assets_mod.ticker(a)), risk, signals, qty=0.0, notional=notional,
-                            timeframe=tfm, stop_atr=float(env("QUANT_STOP_ATR", "2.0")),
-                            state_path=state_dir / f"live_state.{a}.json", kill_file=kill, trades_path=trades,
-                            label=f"{venue}/{mode}:{a}")
+    def prepare(a: str) -> Runner | None:
+        try:
+            ex = build_kalshi(mode, env, assets_mod.ticker(a))
+            if ex.contract_price * ex.min_qty > notional * 1.5:  # 1 contrato ja passaria muito do valor por entrada
+                log.warning("%s fora: o menor contrato vale %.2f USD (> 1,5 x %.2f); aumente QUANT_NOTIONAL",
+                            a, ex.contract_price * ex.min_qty, notional)
+                return None
+            if assets_mod.uses_binance(a):
+                feed = build_feed(mode, assets_mod.symbol(a), tfm, kind, env("QUANT_FEED", "auto"), venue)
+            else:
+                feed = KalshiFeed(assets_mod.ticker(a), tfm, env="demo")
+            loss = float(env("QUANT_MAX_DAILY_LOSS", "20"))
+            risk = RiskManager(RiskLimits(max_qty=float("inf"), max_daily_loss=loss))
+            return Runner(feed, ex, risk, signals, qty=0.0, notional=notional, timeframe=tfm,
+                          stop_atr=float(env("QUANT_STOP_ATR", "2.0")), state_path=state_dir / f"live_state.{a}.json",
+                          kill_file=kill, trades_path=trades, label=f"{venue}/{mode}:{a}")
+        except Exception:  # noqa: BLE001 - um mercado fora do ar nao pode impedir os outros de subirem
+            log.exception("nao consegui preparar %s; seguindo sem ele", a)
+            return None
+
+    # cada ativo faz 2 chamadas de rede ao subir (mercado + feed): em paralelo, 145 sobem em segundos, nao em minutos
+    with ThreadPoolExecutor(max_workers=min(12, len(names))) as pool:
+        runners = {a: r for a, r in zip(names, pool.map(prepare, names), strict=True) if r is not None}
+    if not runners:
+        raise SystemExit("nenhum dos ativos de QUANT_ASSETS pode ser operado agora (veja o log acima)")
     total = env("QUANT_MAX_TOTAL_LOSS")
     return MultiRunner(runners, max_total_loss=float(total) if total else None)
 
