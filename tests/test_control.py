@@ -202,7 +202,8 @@ def test_polkit_so_libera_a_unit_do_runner_e_as_tres_acoes():
     assert '["start", "stop", "restart"]' in rule and "manage-unit-files" not in rule
     live = (root / "quant-live.service").read_text()
     assert live.index("EnvironmentFile=/etc/quant-live.env") < live.index("EnvironmentFile=-/var/lib/quant/runtime.env")
-    assert "runtime.env" in (root / "quant-control.service").read_text()
+    ctl_unit = (root / "quant-control.service").read_text()
+    assert "runtime.env" in ctl_unit and "QUANT_SELFCHECK=/var/lib/quant/selfcheck.json" in ctl_unit
 
 
 def test_script_da_pagina_tem_sintaxe_js_valida(tmp_path):

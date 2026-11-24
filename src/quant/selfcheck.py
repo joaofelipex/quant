@@ -34,12 +34,14 @@ def _run(cmd: list[str], timeout: float = 15, cwd: Path | None = None) -> tuple[
 def run_pytest(root: Path = ROOT, timeout: float = 900) -> dict:
     """Roda a suite e devolve contagens. ``-p no:cacheprovider``: nao escreve nada no diretorio do projeto."""
     t0 = time.time()
-    rc, out = _run([sys.executable, "-m", "pytest", "-q", "-W", "ignore", "-p", "no:cacheprovider"],
-                   timeout=timeout, cwd=root)
+    cmd = [sys.executable, "-m", "pytest", "-q", "-W", "ignore", "-p", "no:cacheprovider", "-o", "addopts="]
+    rc, out = _run(cmd, timeout=timeout, cwd=root)
     counts = {k: int(n) for n, k in re.findall(r"(\d+) (passed|failed|error|errors|skipped)", out)}
     failed = counts.get("failed", 0) + counts.get("error", 0) + counts.get("errors", 0)
     names = re.findall(r"^FAILED (\S+)", out, re.M)[:10]
-    return {"ok": rc == 0 and failed == 0, "passed": counts.get("passed", 0), "failed": failed,
+    # sem "N passed" no resumo nao ha como afirmar que algo rodou: reprova em vez de dar OK com 0 testes
+    passed = counts.get("passed", 0)
+    return {"ok": rc == 0 and failed == 0 and passed > 0, "passed": passed, "failed": failed,
             "skipped": counts.get("skipped", 0), "seconds": round(time.time() - t0, 1), "failures": names,
             "tail": out.splitlines()[-1] if out else ""}
 

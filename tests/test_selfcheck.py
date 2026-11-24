@@ -53,3 +53,15 @@ def test_relatorio_sem_testes_e_gravacao_atomica(tmp_path, monkeypatch):
     out = tmp_path / "selfcheck.json"
     selfcheck.write_report(rep, out)
     assert json.loads(out.read_text())["ok"] is True and not (tmp_path / "selfcheck.tmp").exists()
+
+
+def test_addopts_q_do_projeto_nao_esconde_o_resumo(tmp_path):
+    # como o pyproject do repo: com -q duplicado o pytest nao imprime o resumo
+    (tmp_path / "pytest.ini").write_text("[pytest]\naddopts = -q\n")
+    (tmp_path / "test_a.py").write_text("def test_ok():\n    assert True\n")
+    r = selfcheck.run_pytest(tmp_path, timeout=120)
+    assert r["passed"] == 1 and r["ok"] is True
+
+
+def test_zero_testes_coletados_nao_e_ok(tmp_path):
+    assert selfcheck.run_pytest(tmp_path, timeout=120)["ok"] is False
