@@ -20,7 +20,7 @@ import time
 import uuid
 from pathlib import Path
 
-from .executor import Executor
+from .executor import Executor, InsufficientFunds
 from .models import Fill, Position
 
 log = logging.getLogger("quant.live")
@@ -183,7 +183,12 @@ class KalshiPerpsExecutor(Executor):
             body["reduce_only"] = True
         if self.subaccount is not None:
             body["subaccount"] = self.subaccount
-        res = self._req("POST", "/margin/orders", body=body)
+        try:
+            res = self._req("POST", "/margin/orders", body=body)
+        except KalshiError as e:
+            if not reduce_only and "available_balance_too_low" in f"{e.code} {e}":
+                raise InsufficientFunds(f"{self.ticker}: saldo/margem insuficiente na conta ({e.code})") from e
+            raise
         filled = float(res.get("fill_count") or 0)
         if filled <= 0:
             raise KalshiError(f"ordem IOC sem fill (limite {limit}, livro bid={bid} ask={ask}); nada foi aberto")

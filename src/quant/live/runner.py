@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from .executor import Executor
+from .executor import Executor, InsufficientFunds
 from .feed import TIMEFRAME_SECONDS, Feed
 from .risk import RiskManager
 
@@ -214,8 +214,13 @@ class Runner:
         if pos is None and sig != 0 and result == "ok" and atr_ok:
             ok, why = self.risk.check_entry(self._size(float(last["close"])), now, bar_close)
             if ok:
-                protected = self._enter(sig, float(last["close"]), float(row["atr"]), now)
-                result = "entrada" if protected else "sem_protecao"
+                try:
+                    protected = self._enter(sig, float(last["close"]), float(row["atr"]), now)
+                    result = "entrada" if protected else "sem_protecao"
+                except InsufficientFunds as e:  # sem margem: pula esta barra (repetir a cada 5 s so martela a API)
+                    log.warning("entrada pulada: %s", e)
+                    self.stop = self.stop_dist = self.entry = None
+                    result = "sem_margem"
             else:
                 log.warning("entrada bloqueada: %s", why)
                 result = "bloqueada"

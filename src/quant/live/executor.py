@@ -36,6 +36,10 @@ def configure_venue(ex, testnet: bool, kind: str = "testnet") -> None:
         raise ValueError(f"QUANT_TESTNET_KIND invalido: {kind!r} (use 'testnet' ou 'demo')")
 
 
+class InsufficientFunds(RuntimeError):
+    """A corretora recusou a ordem de ENTRADA por falta de saldo/margem. Nao adianta repetir na mesma barra."""
+
+
 class Executor(ABC):
     @abstractmethod
     def position(self) -> Position | None:

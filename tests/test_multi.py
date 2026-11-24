@@ -385,3 +385,54 @@ class TestKalshiFeed:
 
         with pytest.raises(ValueError, match="nao suportado"):
             KalshiFeed("KXAAPLPERP1", "3m", fetch=lambda u: self.MARKET)
+
+
+class TestSemMargem:
+    """available_balance_too_low: pula a barra em vez de repetir a cada 5 s (e nao derruba os outros ativos)."""
+
+    def test_kalshi_traduz_o_codigo_de_saldo(self):
+        from quant.live.executor import InsufficientFunds
+        from quant.live.kalshi import KalshiError, KalshiPerpsExecutor
+
+        ex = KalshiPerpsExecutor.__new__(KalshiPerpsExecutor)
+        ex.ticker = "KXDOGEPERP1"
+        ex.unit, ex.tick, ex.whole, ex.min_qty, ex.market_version, ex.subaccount = 100.0, 0.0001, True, 1.0, 1, None
+        ex.basis, ex.rebase = 1.0, False
+        ex._market = lambda: {"status": "active", "bid": "5.5", "ask": "5.6", "price": "5.55"}
+        ex.position = lambda: None
+
+        def sem_saldo(*a, **k):
+            raise KalshiError("POST /margin/orders -> HTTP 400", "available_balance_too_low")
+
+        ex._req = sem_saldo
+        with pytest.raises(InsufficientFunds, match="margem insuficiente"):
+            ex.market_order(1, 500, 0.0551)
+        with pytest.raises(KalshiError):  # fechar (reduce_only) nunca vira "sem margem": e outro problema
+            ex.market_order(-1, 500, 0.0551, reduce_only=True)
+
+    def test_runner_pula_a_barra_e_marca_como_processada(self, caplog):
+        from quant.live.executor import InsufficientFunds
+
+        class SemMargem(PaperExecutor):
+            def market_order(self, *a, **k):
+                raise InsufficientFunds("KXDOGEPERP1: saldo/margem insuficiente")
+
+        bars = pd.DataFrame({"datetime": pd.date_range("2026-01-01", periods=5, freq="1min"),
+                             "open": 1.0, "high": 1.0, "low": 1.0, "close": 50.0})
+
+        class Feed:
+            def closed_bars(self, n):
+                return bars
+
+        def sinais(b):
+            return b.assign(signal=1, atr=1.0)
+
+        r = Runner(Feed(), SemMargem(), RiskManager(RiskLimits(max_qty=1e9, max_daily_loss=1e9)), sinais, qty=0.0,
+                   notional=25.0, timeframe="1m", state_path="/nao/grava.json")
+        r._save = lambda: None
+        r.now_fn = lambda: pd.Timestamp("2026-01-01 00:05:10")
+        with caplog.at_level(logging.WARNING):
+            assert r.step() == "sem_margem"
+        assert "entrada pulada" in caplog.text and r.entry is None and r.stop is None
+        assert r.last_bar == bars.iloc[-1]["datetime"]  # barra processada: nao repete a cada 5 s
+        assert r.step() == "sem_barra_nova"
