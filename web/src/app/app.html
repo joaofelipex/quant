@@ -1,3 +1,4 @@
+@if (auth.user()) {
 <div class="shell">
   <aside class="side">
     <div class="brand">
@@ -17,6 +18,7 @@
       <button class="btn ghost sm" (click)="theme.toggle()" [attr.aria-label]="'tema ' + (theme.theme() === 'dark' ? 'claro' : 'escuro')">
         <app-icon [name]="theme.theme() === 'dark' ? 'sun' : 'moon'" [size]="15" /> {{ theme.theme() === 'dark' ? 'tema claro' : 'tema escuro' }}
       </button>
+      <button class="btn ghost sm" (click)="auth.logout()"><app-icon name="logout" [size]="15" /> sair ({{ auth.user() }})</button>
     </div>
   </aside>
 
@@ -29,9 +31,12 @@
       } @else {
         <span class="pill bad"><span class="dot"></span>sem conexão</span>
       }
-      <button class="btn ghost sm mobile-theme" (click)="theme.toggle()" aria-label="alternar tema">
-        <app-icon [name]="theme.theme() === 'dark' ? 'sun' : 'moon'" [size]="16" />
-      </button>
+      <span class="mobile-theme">
+        <button class="btn ghost sm" (click)="theme.toggle()" aria-label="alternar tema">
+          <app-icon [name]="theme.theme() === 'dark' ? 'sun' : 'moon'" [size]="16" />
+        </button>
+        <button class="btn ghost sm" (click)="auth.logout()" aria-label="sair"><app-icon name="logout" [size]="16" /></button>
+      </span>
     </div>
 
     @if (store.banner().tone === 'bad' || store.banner().tone === 'warn') {
@@ -43,5 +48,8 @@
     <router-outlet />
   </div>
 </div>
+} @else if (auth.checked()) {
+  <app-login />
+}
 <app-toasts />
 <app-confirm />

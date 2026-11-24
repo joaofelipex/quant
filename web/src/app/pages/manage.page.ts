@@ -1,5 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { ApiService } from '../core/api.service';
+import { FormsModule } from '@angular/forms';
+import { ApiService, errMsg } from '../core/api.service';
+import { AuthService } from '../core/auth.service';
 import { runAction } from '../core/action';
 import { Tone } from '../core/models';
 import { StatusStore } from '../core/status.store';
@@ -10,7 +12,7 @@ import { ToastService } from '../shared/toast';
 
 @Component({
   selector: 'app-manage',
-  imports: [PageHead, Icon],
+  imports: [PageHead, Icon, FormsModule],
   styles: `
     ol{margin:8px 0 0;padding-left:20px;color:var(--mute);font-size:14px;display:flex;flex-direction:column;gap:6px}
     ol b{color:var(--ink)}`,
@@ -46,7 +48,26 @@ import { ToastService } from '../shared/toast';
         </div>
         <p class="note mt">O painel não recebe código pela web: só aplica o pacote que você colocou por SSH.</p>
       </section>
-    </div>`,
+    </div>
+
+    <section class="card mt">
+      <div class="card-h">
+        <div class="row"><app-icon name="shield" /><h2>Segurança</h2></div>
+        <span class="pill ok">sessão de {{ auth.user() }}</span>
+      </div>
+      <form class="grid cols-3" (submit)="$event.preventDefault(); changePassword()">
+        <label class="field"><span>Senha atual</span>
+          <input type="password" name="atual" autocomplete="current-password" [ngModel]="atual()" (ngModelChange)="atual.set($event)"></label>
+        <label class="field"><span>Nova senha</span>
+          <input type="password" name="nova" autocomplete="new-password" [ngModel]="nova()" (ngModelChange)="nova.set($event)">
+          <span class="hint">mínimo 10 caracteres</span></label>
+        <label class="field"><span>Repita a nova senha</span>
+          <input type="password" name="repete" autocomplete="new-password" [ngModel]="repete()" (ngModelChange)="repete.set($event)"></label>
+        <div class="row"><button class="btn primary" type="submit" [disabled]="busy() || !atual() || !nova() || nova() !== repete()">Trocar senha</button>
+          @if (repete() && nova() !== repete()) { <span class="sub bad">as senhas não conferem</span> }</div>
+      </form>
+      <p class="note mt">Trocar a senha encerra todas as sessões abertas, inclusive esta: você entra de novo com a nova.</p>
+    </section>`,
 })
 export class ManagePage {
   private readonly api = inject(ApiService);
@@ -54,6 +75,10 @@ export class ManagePage {
   private readonly toast = inject(ToastService);
   private readonly confirmSvc = inject(ConfirmService);
   protected readonly busy = signal(false);
+  protected readonly auth = inject(AuthService);
+  protected readonly atual = signal('');
+  protected readonly nova = signal('');
+  protected readonly repete = signal('');
 
   protected readonly alertas = computed(() => this.store.data()?.alerts?.canais ?? []);
   protected readonly alertSub = computed(() => {
@@ -76,6 +101,14 @@ export class ManagePage {
   private go(call: ReturnType<ApiService['testAlert']>, ok: (r: { canais?: string[] }) => string): void {
     this.busy.set(true);
     runAction(this.toast, call, ok, () => { this.busy.set(false); this.store.refresh(); });
+  }
+
+  protected changePassword(): void {
+    this.busy.set(true);
+    this.auth.changePassword(this.atual(), this.nova()).subscribe({
+      next: () => { this.busy.set(false); this.atual.set(''); this.nova.set(''); this.repete.set(''); this.toast.ok('Senha trocada: entre de novo com a nova'); },
+      error: e => { this.busy.set(false); this.toast.error(`Falhou: ${errMsg(e)}`); },
+    });
   }
 
   protected testAlert(): void { this.go(this.api.testAlert(), r => `Alerta de teste enviado: ${(r.canais ?? []).join(', ')}`); }

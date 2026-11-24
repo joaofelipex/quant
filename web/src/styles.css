@@ -1,3 +1,18 @@
+/* Tailwind 4 (a versao mais nova publicada; nao existe v5). Sem o preflight: o reset proprio abaixo ja cobre a base e
+   o preflight mudaria titulos, botoes e tabelas ja prontos. Os tokens do tema viram utilitarios (bg-surface, text-mute...). */
+@layer theme, base, components, utilities;
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+@theme inline {
+  --color-bg: var(--bg); --color-surface: var(--surface); --color-surface-2: var(--surface-2);
+  --color-line: var(--line); --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink); --color-mute: var(--mute); --color-faint: var(--faint);
+  --color-accent: var(--accent); --color-accent-ink: var(--accent-ink); --color-accent-soft: var(--accent-soft);
+  --color-ok: var(--ok); --color-ok-soft: var(--ok-soft); --color-bad: var(--bad); --color-bad-soft: var(--bad-soft);
+  --color-warn: var(--warn); --color-warn-soft: var(--warn-soft);
+  --radius-card: var(--radius); --radius-ctl: var(--radius-sm); --shadow-card: var(--shadow); --font-mono: var(--mono);
+}
+
 /* ---------- tokens ---------- */
 :root {
   --bg: #0a0d13; --surface: #11161f; --surface-2: #161c27; --line: #222a38; --line-strong: #2e394b;

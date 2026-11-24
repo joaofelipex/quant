@@ -156,6 +156,18 @@ sudo systemctl daemon-reload && sudo systemctl enable --now quant-alert.timer &&
 PnL, motivo). O painel mostra curva, acerto, pior queda e os últimos trades, e o CSV baixa em `/controle/api/trades.csv`.
 O PnL de saída por stop da corretora é uma estimativa (o runner não vê o preço real do fill do gatilho).
 
+**Login do painel:** `/controle/` tem tela de login própria (senha com PBKDF2, cookie de sessão `HttpOnly`/`Secure`/`SameSite=Strict`,
+12 h ou 7 dias com "manter conectado", bloqueio crescente após 5 erros por IP). Sem senha definida, toda a API responde 401 (falha
+fechada). Defina a senha **você mesmo**, na VM (ela é digitada sem eco e só o hash é gravado em `/var/lib/quant/auth.json`):
+
+```bash
+sudo /opt/quant/deploy/definir-senha.sh            # usuário "painel"; rode de novo para trocar
+```
+
+Depois de confirmar que o login funciona, desligue o basic auth do nginx **só** no `/controle/` (o `/` continua protegido):
+copie `deploy/nginx-quant.conf` (blocos `/controle/`) para `/etc/nginx/sites-available/quant.mixco.com.br`, `sudo nginx -t` e
+`sudo systemctl reload nginx`. Trocar a senha (CLI ou pela aba Gestão) encerra todas as sessões abertas.
+
 **Boleta manual (Boleta):** comprar, vender, colocar stop e fechar a mão pelo painel, só na Kalshi **demo**. O painel não tem
 chave: ele grava um pedido validado e dispara `quant-order.service` (que tem a chave e recusa tudo que não seja `kalshi` +
 `testnet`). Abrir/proteger exige o runner parado; fechar e consultar sempre funcionam. Teto de 0,05 por ordem; o KILL bloqueia

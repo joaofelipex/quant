@@ -2,6 +2,7 @@ import { DestroyRef, Injectable, computed, inject, signal } from '@angular/core'
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { EMPTY, Subject, catchError, exhaustMap, filter, merge, timer } from 'rxjs';
 import { ApiService, errMsg } from './api.service';
+import { AuthService } from './auth.service';
 import { dur, TIMEFRAME_S } from './format';
 import { Status, Tone } from './models';
 
@@ -29,6 +30,7 @@ export function computeBanner(d: Status | null, error: string | null): Banner {
 @Injectable({ providedIn: 'root' })
 export class StatusStore {
   private readonly api = inject(ApiService);
+  private readonly auth = inject(AuthService);
   private readonly manual = new Subject<void>();
 
   readonly data = signal<Status | null>(null);
@@ -39,7 +41,7 @@ export class StatusStore {
 
   constructor() {
     merge(timer(0, POLL_MS), this.manual).pipe(
-      filter(() => typeof document === 'undefined' || !document.hidden),
+      filter(() => this.auth.user() != null && (typeof document === 'undefined' || !document.hidden)),
       exhaustMap(() => this.api.status().pipe(
         catchError(e => { this.error.set(errMsg(e)); this.loading.set(false); return EMPTY; }))),
       takeUntilDestroyed(inject(DestroyRef)),

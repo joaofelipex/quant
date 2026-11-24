@@ -365,13 +365,21 @@ def trigger_kill(kill_file: Path) -> bool:
     return kill_file.exists()
 
 
-def make_handler(state_path: Path, kill_file: Path, runtime_path: Path = RUNTIME_ENV, run=None):
+def make_handler(state_path: Path, kill_file: Path, runtime_path: Path = RUNTIME_ENV, run=None, auth=None):
+    """``auth`` (quant.auth.Auth) liga o login: sem cookie de sessao valido toda rota /api/* (menos login) da 401.
+    ``None`` = sem login (so testes e `ng serve` local; o servico real sempre passa o Auth)."""
+    from . import auth as authmod
+
+    cookie_path = os.environ.get("QUANT_COOKIE_PATH", "/")
+
     class Handler(BaseHTTPRequestHandler):
         server_version = "quant-control"
         sys_version = ""
 
-        def _send(self, code: int, body: bytes, ctype: str, cache: str = "no-store") -> None:
+        def _send(self, code: int, body: bytes, ctype: str, cache: str = "no-store", extra=()) -> None:
             self.send_response(code)
+            for k, v in extra:
+                self.send_header(k, v)
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", cache)
@@ -382,8 +390,33 @@ def make_handler(state_path: Path, kill_file: Path, runtime_path: Path = RUNTIME
             self.end_headers()
             self.wfile.write(body)
 
-        def _json(self, code: int, obj: dict) -> None:
-            self._send(code, json.dumps(obj, default=str).encode(), "application/json; charset=utf-8")
+        def _json(self, code: int, obj: dict, extra=()) -> None:
+            self._send(code, json.dumps(obj, default=str).encode(), "application/json; charset=utf-8", extra=extra)
+
+        def _ip(self) -> str:
+            peer = self.client_address[0]
+            return (self.headers.get("X-Real-IP") or peer) if peer in ("127.0.0.1", "::1") else peer  # so o nginx local
+
+        def _user(self) -> str | None:
+            return "dev" if auth is None else auth.user_from_cookie(self.headers.get("Cookie"))
+
+        def _need_login(self) -> bool:
+            """Responde 401 e devolve True quando nao ha sessao valida."""
+            if self._user():
+                return False
+            self._json(401, {"erro": "login necessario", "configurado": auth.configured if auth else True})
+            return True
+
+        def _body(self, limit: int = 2048):
+            try:
+                body = json.loads(self.rfile.read(min(int(self.headers.get("Content-Length") or 0), limit)) or b"{}")
+            except ValueError:
+                return None
+            return body if isinstance(body, dict) else None
+
+        def _set_cookie(self, value: str, ttl: int):
+            secure = self.headers.get("X-Forwarded-Proto") == "https"
+            return [("Set-Cookie", authmod.cookie_header(value, ttl, path=cookie_path, secure=secure))]
 
         def _static(self, path: str) -> None:
             root = web_dir()
@@ -401,6 +434,12 @@ def make_handler(state_path: Path, kill_file: Path, runtime_path: Path = RUNTIME
             path = self.path.split("?")[0]
             if not path.startswith("/api/"):
                 return self._static(path)
+            if path == "/api/session":
+                if self._need_login():
+                    return
+                return self._json(200, {"user": self._user(), "configurado": True})
+            if self._need_login():
+                return
             if path == "/api/status":
                 self._json(200, build_status(state_path, kill_file))
             elif path == "/api/trades":
@@ -425,6 +464,14 @@ def make_handler(state_path: Path, kill_file: Path, runtime_path: Path = RUNTIME
             if self.headers.get("X-Quant-Control") != "1":
                 return self._json(403, {"erro": "cabecalho X-Quant-Control ausente"})
             path = self.path.split("?")[0]
+            if path == "/api/login":
+                return self._login()
+            if path == "/api/logout":
+                return self._json(200, {"ok": True}, self._set_cookie("", 0))
+            if self._need_login():
+                return
+            if path == "/api/password":
+                return self._password()
             if path == "/api/kill":
                 ok = trigger_kill(kill_file)
                 return self._json(200 if ok else 500, {"kill_file": ok})
@@ -470,6 +517,32 @@ def make_handler(state_path: Path, kill_file: Path, runtime_path: Path = RUNTIME
                     return self._json(400, {"erro": str(e)})
             self._json(404, {"erro": "nao encontrado"})
 
+        def _login(self):
+            body = self._body()
+            if auth is None or body is None:
+                return self._json(400, {"ok": False, "erro": "pedido invalido"})
+            ip = self._ip()
+            try:
+                value, ttl = auth.login(str(body.get("user", ""))[:60], str(body.get("password", ""))[:256], ip,
+                                        bool(body.get("lembrar")))
+            except authmod.AuthError as e:
+                print(f"login RECUSADO ip={ip} user={str(body.get('user', ''))[:20]!r}: {e}", flush=True)
+                return self._json(e.status, {"ok": False, "erro": str(e)})
+            print(f"login ok ip={ip} user={str(body.get('user', ''))[:20]!r}", flush=True)
+            self._json(200, {"ok": True, "user": str(body.get("user", ""))[:60]}, self._set_cookie(value, ttl))
+
+        def _password(self):
+            body = self._body()
+            if auth is None or body is None:
+                return self._json(400, {"ok": False, "erro": "pedido invalido"})
+            try:
+                auth.change_password(self._user(), str(body.get("atual", ""))[:256], str(body.get("nova", ""))[:256])
+            except authmod.AuthError as e:
+                return self._json(400, {"ok": False, "erro": str(e)})
+            print(f"senha trocada ip={self._ip()}", flush=True)
+            # a troca invalida todas as sessoes (inclusive esta): a tela volta ao login
+            self._json(200, {"ok": True}, self._set_cookie("", 0))
+
         def log_message(self, fmt, *args):  # noqa: A002
             print(f"{self.address_string()} {fmt % args}", flush=True)
 
@@ -481,8 +554,12 @@ def main() -> None:
     kill = Path(os.environ.get("QUANT_KILL_FILE", "KILL"))
     port = int(os.environ.get("QUANT_CONTROL_PORT", "8765"))
     runtime = Path(os.environ.get("QUANT_RUNTIME_ENV", str(RUNTIME_ENV)))
-    srv = ThreadingHTTPServer(("127.0.0.1", port), make_handler(state, kill, runtime))
-    print(f"quant.control em 127.0.0.1:{port} (estado={state}, kill={kill})", flush=True)
+    from .auth import Auth
+
+    auth = None if os.environ.get("QUANT_AUTH_DISABLED") == "1" else Auth.from_env()
+    srv = ThreadingHTTPServer(("127.0.0.1", port), make_handler(state, kill, runtime, auth=auth))
+    print(f"quant.control em 127.0.0.1:{port} (estado={state}, kill={kill}, login={'off' if auth is None else 'on'})",
+          flush=True)
     srv.serve_forever()
 
 
