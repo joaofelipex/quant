@@ -11,6 +11,7 @@ tentar derrubar a estratégia**, não confirmá-la.
 | [`win_trend`](estudos/win_trend/README.md) | Donchian + regime ER no WIN 5 min | PF 1,27 no contrato anterior (t = 0,9), **0,94** no WINZ26; DSR 0,05–0,15 | inconclusivo |
 | [`ema_macd`](estudos/ema_macd/README.md) | Cruzamento EMA + MACD (robôs NTSL v11–v14) em WIN e WDO | PF 0,7–1,1 sem filtro/com filtro; positivos só após ajustar stop | sem edge |
 | [`funding_carry`](estudos/funding_carry/README.md) | Carry de funding delta-neutro (spot + perpétuo vendido), BTC+ETH | 5,2% a.a. líquido no hold-out (7,5% sempre ligado), mas liquidação da perna vendida em altas de 20–31% no dia | **reprovada** (risco de cauda) |
+| [`xsmom_cripto`](estudos/xsmom_cripto/README.md) | Momentum de corte transversal neutro em dólar, 6 cripto, semanal | Dev Sharpe -0,33; hold-out 1,04 (alfa t = 1,41; DSR 0,29) | **reprovada** (instável entre regimes) |
 | [`runner_eth_1m`](estudos/runner_eth_1m/README.md) | A estratégia que o runner ao vivo usa (trend_follow, ETH 1 min) | PF 0,26 a 0,64 em 2023, 2024 e 2025 após 7 bps/lado | **reprovada** (perde em todos os anos) |
 | [`eth_flow`](estudos/eth_flow/README.md) | Scalper de agressão no ETH futuro | 1 dia de dado | hipótese |
 
