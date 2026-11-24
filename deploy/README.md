@@ -156,17 +156,23 @@ sudo systemctl daemon-reload && sudo systemctl enable --now quant-alert.timer &&
 PnL, motivo). O painel mostra curva, acerto, pior queda e os últimos trades, e o CSV baixa em `/controle/api/trades.csv`.
 O PnL de saída por stop da corretora é uma estimativa (o runner não vê o preço real do fill do gatilho).
 
-**Login do painel:** `/controle/` tem tela de login própria (senha com PBKDF2, cookie de sessão `HttpOnly`/`Secure`/`SameSite=Strict`,
-12 h ou 7 dias com "manter conectado", bloqueio crescente após 5 erros por IP). Sem senha definida, toda a API responde 401 (falha
-fechada). Defina a senha **você mesmo**, na VM (ela é digitada sem eco e só o hash é gravado em `/var/lib/quant/auth.json`):
+**Contas e login do painel:** `/controle/` tem tela de login própria, com usuários, papéis e auditoria:
 
-```bash
-sudo /opt/quant/deploy/definir-senha.sh            # usuário "painel"; rode de novo para trocar
-```
+- **Primeiro acesso:** sem nenhum usuário, o painel mostra a tela "primeiro acesso". Você prova que é o dono da VM com o token
+  (`sudo cat /var/lib/quant/setup-token`, aparece também no journal do `quant-control`) e cria o admin pelo navegador. Depois disso o
+  token é apagado e a rota fecha.
+- **Papéis:** `leitor` só vê; `operador` liga/para o runner, usa a Boleta, o kill-switch e os parâmetros; `admin` também
+  atualiza/reverte o código e gere usuários. O servidor confere o papel em cada rota (401 sem sessão, 403 sem papel).
+- **Segurança:** senhas com PBKDF2 (nunca em texto); cookie de sessão `HttpOnly`/`Secure`/`SameSite=Strict`, sorteado e guardado
+  só como hash no servidor (dá para encerrar sessões, e trocar a senha, mudar o papel ou desativar a conta derruba as sessões);
+  2FA opcional por aplicativo autenticador (TOTP; cada código vale uma vez); bloqueio crescente por IP após 5 erros; trilha de
+  auditoria em `/var/lib/quant/audit.log` (logins, falhas e ações), visível na aba Usuários.
+- **Telas:** *Minha conta* (trocar senha, 2FA, sessões abertas) para todos; *Usuários e auditoria* só para admin.
+- **Perdeu o acesso?** Na VM: `sudo deploy/recuperar-acesso.sh senha USUARIO` (cria um admin ou troca a senha) ou `... 2fa USUARIO`.
 
-Depois de confirmar que o login funciona, desligue o basic auth do nginx **só** no `/controle/` (o `/` continua protegido):
-copie `deploy/nginx-quant.conf` (blocos `/controle/`) para `/etc/nginx/sites-available/quant.mixco.com.br`, `sudo nginx -t` e
-`sudo systemctl reload nginx`. Trocar a senha (CLI ou pela aba Gestão) encerra todas as sessões abertas.
+Depois de confirmar que o login funciona, desligue o basic auth do nginx **só** no `/controle/` (o `/` continua protegido): copie
+os blocos `/controle/` de `deploy/nginx-quant.conf` para `/etc/nginx/sites-available/quant.mixco.com.br`, `sudo nginx -t` e
+`sudo systemctl reload nginx`.
 
 **Boleta manual (Boleta):** comprar, vender, colocar stop e fechar a mão pelo painel, só na Kalshi **demo**. O painel não tem
 chave: ele grava um pedido validado e dispara `quant-order.service` (que tem a chave e recusa tudo que não seja `kalshi` +

@@ -18,7 +18,9 @@
       <button class="btn ghost sm" (click)="theme.toggle()" [attr.aria-label]="'tema ' + (theme.theme() === 'dark' ? 'claro' : 'escuro')">
         <app-icon [name]="theme.theme() === 'dark' ? 'sun' : 'moon'" [size]="15" /> {{ theme.theme() === 'dark' ? 'tema claro' : 'tema escuro' }}
       </button>
-      <button class="btn ghost sm" (click)="auth.logout()"><app-icon name="logout" [size]="15" /> sair ({{ auth.user() }})</button>
+      <a class="btn ghost sm" routerLink="/conta"><app-icon name="user" [size]="15" /> {{ auth.user() }} · conta</a>
+      @if (auth.isAdmin()) { <a class="btn ghost sm" routerLink="/usuarios"><app-icon name="shield" [size]="15" /> usuários</a> }
+      <button class="btn ghost sm" (click)="auth.logout()"><app-icon name="logout" [size]="15" /> sair</button>
     </div>
   </aside>
 
@@ -35,10 +37,14 @@
         <button class="btn ghost sm" (click)="theme.toggle()" aria-label="alternar tema">
           <app-icon [name]="theme.theme() === 'dark' ? 'sun' : 'moon'" [size]="16" />
         </button>
+        <a class="btn ghost sm" routerLink="/conta" aria-label="minha conta"><app-icon name="user" [size]="16" /></a>
         <button class="btn ghost sm" (click)="auth.logout()" aria-label="sair"><app-icon name="logout" [size]="16" /></button>
       </span>
     </div>
 
+    @if (auth.role() === 'leitor') {
+      <div class="alert warn" role="status"><app-icon name="shield" [size]="18" /> <span>Você entrou como leitor: só visualização. Peça a um administrador para mudar seu papel.</span></div>
+    }
     @if (store.banner().tone === 'bad' || store.banner().tone === 'warn') {
       <div class="alert" [class]="store.banner().tone" role="alert">
         <app-icon name="alert" [size]="18" /> <span>{{ store.banner().text }}</span>

@@ -1,6 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService, errMsg } from '../core/api.service';
+import { AuthService } from '../core/auth.service';
 import { runAction } from '../core/action';
 import { SettingsResponse } from '../core/models';
 import { StatusStore } from '../core/status.store';
@@ -36,9 +37,9 @@ const LABEL: Record<Key, string> = {
           <span class="sub">serviço <code>quant-live</code></span>
         </div>
         <div class="row">
-          <button class="btn primary" [disabled]="busy() || active()" (click)="act('start', 'Ligar')"><app-icon name="play" [size]="15" /> Ligar</button>
-          <button class="btn" [disabled]="busy()" (click)="act('restart', 'Reiniciar')"><app-icon name="refresh" [size]="15" /> Reiniciar</button>
-          <button class="btn" [disabled]="busy() || !active()" (click)="act('stop', 'Parar')"><app-icon name="stop" [size]="15" /> Parar</button>
+          <button class="btn primary" [disabled]="!auth.canOperate() || busy() || active()" (click)="act('start', 'Ligar')"><app-icon name="play" [size]="15" /> Ligar</button>
+          <button class="btn" [disabled]="!auth.canOperate() || busy()" (click)="act('restart', 'Reiniciar')"><app-icon name="refresh" [size]="15" /> Reiniciar</button>
+          <button class="btn" [disabled]="!auth.canOperate() || busy() || !active()" (click)="act('stop', 'Parar')"><app-icon name="stop" [size]="15" /> Parar</button>
         </div>
       </div>
     </section>
@@ -72,8 +73,8 @@ const LABEL: Record<Key, string> = {
           <span class="hint">distância do stop em múltiplos do ATR</span></label>
       </div>
       <div class="row mt">
-        <button class="btn primary" [disabled]="busy() || !dirty()" (click)="save()">Salvar e reiniciar</button>
-        <button class="btn ghost" [disabled]="busy() || !dirty()" (click)="reset()">Descartar</button>
+        <button class="btn primary" [disabled]="!auth.canOperate() || busy() || !dirty()" (click)="save()">Salvar e reiniciar</button>
+        <button class="btn ghost" [disabled]="!auth.canOperate() || busy() || !dirty()" (click)="reset()">Descartar</button>
       </div>
       <p class="note mt">Modo <b>live</b> e Polymarket não podem ser ligados por aqui (só por edição na VM).</p>
     </section>
@@ -96,11 +97,12 @@ const LABEL: Record<Key, string> = {
           <p class="note">Fecha a posição, cancela os stops e para o runner de vez. Para retomar é preciso rever a posição e remover o
             arquivo KILL na VM (<code>deploy/README.md</code>).</p>
         </div>
-        <button class="btn danger" [disabled]="killed() || busy()" (click)="kill()"><app-icon name="alert" [size]="16" /> {{ killed() ? 'KILL já acionado' : 'Acionar kill-switch' }}</button>
+        <button class="btn danger" [disabled]="!auth.canOperate() || killed() || busy()" (click)="kill()"><app-icon name="alert" [size]="16" /> {{ killed() ? 'KILL já acionado' : 'Acionar kill-switch' }}</button>
       </div>
     </section>`,
 })
 export class OperatePage {
+  protected readonly auth = inject(AuthService);
   private readonly api = inject(ApiService);
   private readonly store = inject(StatusStore);
   private readonly toast = inject(ToastService);

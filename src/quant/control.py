@@ -366,8 +366,9 @@ def trigger_kill(kill_file: Path) -> bool:
 
 
 def make_handler(state_path: Path, kill_file: Path, runtime_path: Path = RUNTIME_ENV, run=None, auth=None):
-    """``auth`` (quant.auth.Auth) liga o login: sem cookie de sessao valido toda rota /api/* (menos login) da 401.
-    ``None`` = sem login (so testes e `ng serve` local; o servico real sempre passa o Auth)."""
+    """``auth`` (quant.auth.Auth) liga contas e papeis: cada rota /api/* exige a sessao e o papel de
+    ``accounts.required_role`` (401 sem sessao, 403 sem papel). ``None`` = sem login (so testes e `ng serve` local)."""
+    from . import accounts
     from . import auth as authmod
 
     cookie_path = os.environ.get("QUANT_COOKIE_PATH", "/")
@@ -397,14 +398,40 @@ def make_handler(state_path: Path, kill_file: Path, runtime_path: Path = RUNTIME
             peer = self.client_address[0]
             return (self.headers.get("X-Real-IP") or peer) if peer in ("127.0.0.1", "::1") else peer  # so o nginx local
 
-        def _user(self) -> str | None:
-            return "dev" if auth is None else auth.user_from_cookie(self.headers.get("Cookie"))
+        def _session(self) -> dict | None:
+            if auth is None:
+                return {"sid": "dev", "id": "dev", "user": "dev", "role": "admin", "disabled": False, "totp": False}
+            return auth.session(self.headers.get("Cookie"))
 
-        def _need_login(self) -> bool:
-            """Responde 401 e devolve True quando nao ha sessao valida."""
-            if self._user():
+        def _gate(self, method: str, path: str):
+            """(sessao, liberado). Ja responde 401/403 quando nao liberado. Rotas publicas passam com sessao ou None."""
+            need = accounts.required_role(method, path)
+            sess = self._session()
+            if need is None:
+                return sess, True
+            if sess is None:
+                self._json(401, {"erro": "login necessario", "setup": bool(auth and auth.needs_setup)})
+                return None, False
+            if not accounts.allowed(sess["role"], need):
+                self._json(403, {"erro": f"seu papel ({sess['role']}) nao pode fazer isso"})
+                return sess, False
+            return sess, True
+
+        def _account(self, method: str, path: str, sess, body: dict):
+            """Roda a rota de conta e responde. True se era uma rota de conta."""
+            if auth is None:
                 return False
-            self._json(401, {"erro": "login necessario", "configurado": auth.configured if auth else True})
+            res = accounts.handle(auth, method, path, sess, body, ip=self._ip(),
+                                  agent=self.headers.get("User-Agent", ""), cookie_header=self.headers.get("Cookie"))
+            if res is None:
+                return False
+            code, obj, cookie = res
+            extra = []
+            if cookie and cookie[0] == "set":
+                extra = self._set_cookie(cookie[1], cookie[2])
+            elif cookie:
+                extra = self._set_cookie("", 0)
+            self._json(code, obj, extra)
             return True
 
         def _body(self, limit: int = 2048):
@@ -434,11 +461,10 @@ def make_handler(state_path: Path, kill_file: Path, runtime_path: Path = RUNTIME
             path = self.path.split("?")[0]
             if not path.startswith("/api/"):
                 return self._static(path)
-            if path == "/api/session":
-                if self._need_login():
-                    return
-                return self._json(200, {"user": self._user(), "configurado": True})
-            if self._need_login():
+            sess, ok = self._gate("GET", path)
+            if not ok:
+                return
+            if self._account("GET", path, sess, {}):
                 return
             if path == "/api/status":
                 self._json(200, build_status(state_path, kill_file))
@@ -464,14 +490,16 @@ def make_handler(state_path: Path, kill_file: Path, runtime_path: Path = RUNTIME
             if self.headers.get("X-Quant-Control") != "1":
                 return self._json(403, {"erro": "cabecalho X-Quant-Control ausente"})
             path = self.path.split("?")[0]
-            if path == "/api/login":
-                return self._login()
-            if path == "/api/logout":
-                return self._json(200, {"ok": True}, self._set_cookie("", 0))
-            if self._need_login():
+            sess, ok = self._gate("POST", path)
+            if not ok:
                 return
-            if path == "/api/password":
-                return self._password()
+            body = self._body(4096)
+            if body is None:
+                return self._json(400, {"ok": False, "erro": "corpo JSON invalido"})
+            if self._account("POST", path, sess, body):
+                return
+            if auth is not None and sess:  # trilha de auditoria das acoes de operacao
+                auth.audit("acao", sess["user"], self._ip(), f"{path} {self._summary(path, body)}")
             if path == "/api/kill":
                 ok = trigger_kill(kill_file)
                 return self._json(200 if ok else 500, {"kill_file": ok})
@@ -492,11 +520,6 @@ def make_handler(state_path: Path, kill_file: Path, runtime_path: Path = RUNTIME
                 return self._json(200 if sent else 502, {"ok": bool(sent), "canais": sent,
                                                          "erro": "" if sent else "falha ao entregar (veja o journal)"})
             if path == "/api/order":
-                try:
-                    n = int(self.headers.get("Content-Length") or 0)
-                    body = json.loads(self.rfile.read(min(n, 2048)) or b"{}")
-                except ValueError:
-                    return self._json(400, {"ok": False, "erro": "corpo JSON invalido"})
                 code, res = submit_order(body, Path(os.environ.get("QUANT_ORDER_REQUEST", str(ORDER_REQUEST))),
                                          Path(os.environ.get("QUANT_ORDER_RESULT", str(ORDER_RESULT))), run)
                 return self._json(code, res)
@@ -508,40 +531,18 @@ def make_handler(state_path: Path, kill_file: Path, runtime_path: Path = RUNTIME
                 return self._json(200 if res["ok"] else 409, res)
             if path == "/api/settings":
                 try:
-                    n = int(self.headers.get("Content-Length") or 0)
-                    body = json.loads(self.rfile.read(min(n, 4096)) or b"{}")
-                    if not isinstance(body, dict):
-                        raise SettingError("corpo deve ser um objeto JSON")
                     return self._json(200, {"saved": write_runtime(runtime_path, body), "restart_needed": True})
                 except (SettingError, ValueError) as e:
                     return self._json(400, {"erro": str(e)})
             self._json(404, {"erro": "nao encontrado"})
 
-        def _login(self):
-            body = self._body()
-            if auth is None or body is None:
-                return self._json(400, {"ok": False, "erro": "pedido invalido"})
-            ip = self._ip()
-            try:
-                value, ttl = auth.login(str(body.get("user", ""))[:60], str(body.get("password", ""))[:256], ip,
-                                        bool(body.get("lembrar")))
-            except authmod.AuthError as e:
-                print(f"login RECUSADO ip={ip} user={str(body.get('user', ''))[:20]!r}: {e}", flush=True)
-                return self._json(e.status, {"ok": False, "erro": str(e)})
-            print(f"login ok ip={ip} user={str(body.get('user', ''))[:20]!r}", flush=True)
-            self._json(200, {"ok": True, "user": str(body.get("user", ""))[:60]}, self._set_cookie(value, ttl))
-
-        def _password(self):
-            body = self._body()
-            if auth is None or body is None:
-                return self._json(400, {"ok": False, "erro": "pedido invalido"})
-            try:
-                auth.change_password(self._user(), str(body.get("atual", ""))[:256], str(body.get("nova", ""))[:256])
-            except authmod.AuthError as e:
-                return self._json(400, {"ok": False, "erro": str(e)})
-            print(f"senha trocada ip={self._ip()}", flush=True)
-            # a troca invalida todas as sessoes (inclusive esta): a tela volta ao login
-            self._json(200, {"ok": True}, self._set_cookie("", 0))
+        @staticmethod
+        def _summary(path: str, body: dict) -> str:
+            if path == "/api/order":
+                return " ".join(f"{k}={body[k]}" for k in ("action", "side", "qty", "stop_pct") if k in body)
+            if path == "/api/settings":
+                return ",".join(sorted(str(k) for k in body))
+            return ""
 
         def log_message(self, fmt, *args):  # noqa: A002
             print(f"{self.address_string()} {fmt % args}", flush=True)
@@ -557,6 +558,9 @@ def main() -> None:
     from .auth import Auth
 
     auth = None if os.environ.get("QUANT_AUTH_DISABLED") == "1" else Auth.from_env()
+    if auth is not None and auth.ensure_setup_token():
+        print("PRIMEIRO ACESSO: nenhum usuario ainda. Leia o token na VM:  sudo cat /var/lib/quant/setup-token  "
+              "e abra o painel para criar o admin.", flush=True)
     srv = ThreadingHTTPServer(("127.0.0.1", port), make_handler(state, kill, runtime, auth=auth))
     print(f"quant.control em 127.0.0.1:{port} (estado={state}, kill={kill}, login={'off' if auth is None else 'on'})",
           flush=True)

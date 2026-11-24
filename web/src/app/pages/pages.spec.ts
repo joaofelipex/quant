@@ -5,13 +5,13 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { describe, expect, it } from 'vitest';
 import { Status } from '../core/models';
+import { AuthService } from '../core/auth.service';
 import { StatusStore } from '../core/status.store';
 import { HealthPage } from './health.page';
 import { ManagePage } from './manage.page';
 import { OperatePage } from './operate.page';
 import { OverviewPage } from './overview.page';
 import { PortfolioPage } from './portfolio.page';
-import { LoginPage } from './login.page';
 import { TicketPage } from './ticket.page';
 import { TradesPage } from './trades.page';
 
@@ -40,6 +40,7 @@ function render(page: Type<unknown>, status: Status | null = STATUS): HTMLElemen
     providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([]),
                 { provide: StatusStore, useValue: { data: signal(status), banner: signal({ text: 'runner ativo e dentro do normal', tone: 'ok' }), refresh: () => {} } }],
   });
+  TestBed.inject(AuthService).me.set({ id: 'a1', user: 'chefe', role: 'admin', sid: 's', totp: false });
   const f = TestBed.createComponent(page);
   f.detectChanges();
   return f.nativeElement as HTMLElement;
@@ -95,12 +96,6 @@ describe('paginas renderizam sem erro (pega inject() fora de contexto, templates
     const el = render(TicketPage, { ...STATUS, config: { ...STATUS.config, QUANT_VENUE: 'binance' } });
     expect(el.textContent).toContain('indisponível');
     expect(el.textContent).not.toContain('Comprar');
-  });
-  it('login: formulario e aviso de senha nao definida', () => {
-    const t = render(LoginPage).textContent!;
-    expect(t).toContain('Entrar');
-    expect(t).toContain('manter conectado');
-    expect(t).not.toContain('Senha ainda não definida');
   });
   it('sem dados ainda: nao quebra', () => {
     for (const p of [OverviewPage, TradesPage, PortfolioPage, HealthPage, ManagePage, TicketPage]) {

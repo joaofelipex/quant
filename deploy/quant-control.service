@@ -18,8 +18,7 @@ Environment=QUANT_ALERT_ENV=/etc/quant/alert.env
 Environment=QUANT_ALERT_STATE=/var/lib/quant/alerts_state.json
 Environment=QUANT_ORDER_REQUEST=/var/lib/quant/order-request.json
 Environment=QUANT_ORDER_RESULT=/var/lib/quant/order-result.json
-Environment=QUANT_AUTH_FILE=/var/lib/quant/auth.json
-Environment=QUANT_SESSION_KEY=/var/lib/quant/session.key
+Environment=QUANT_AUTH_DIR=/var/lib/quant
 Environment=QUANT_COOKIE_PATH=/controle/
 Environment=QUANT_CONTROL_PORT=8765
 Environment=QUANT_WEB_DIR=/opt/quant/web-dist

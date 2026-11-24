@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { filter, switchMap, take, timeout, timer } from 'rxjs';
 import { ApiService, errMsg } from '../core/api.service';
+import { AuthService } from '../core/auth.service';
 import { fmt, tone } from '../core/format';
 import { OrderRequest, OrderResult, Tone } from '../core/models';
 import { StatusStore } from '../core/status.store';
@@ -31,7 +32,7 @@ const MAX_QTY = 0.05;
     @media(max-width:640px){.two{grid-template-columns:1fr}}`,
   template: `
     <app-page-head title="Boleta" subtitle="Compre, venda, proteja e feche a mão. Só na conta demo da Kalshi (dinheiro de teste).">
-      <button class="btn" [disabled]="busy()" (click)="refresh()"><app-icon name="refresh" [size]="16" /> Atualizar posição</button>
+      <button class="btn" [disabled]="!auth.canOperate() || busy()" (click)="refresh()"><app-icon name="refresh" [size]="16" /> Atualizar posição</button>
     </app-page-head>
 
     @if (!demoOk()) {
@@ -84,8 +85,8 @@ const MAX_QTY = 0.05;
         @if (pos(); as p) {
           <p class="note">{{ p.side > 0 ? 'LONG' : 'SHORT' }} de {{ p.qty }} ETH, entrada em {{ fmt(p.entry) }}.</p>
           <div class="row mt">
-            <button class="btn danger" [disabled]="busy()" (click)="close()">Fechar posição</button>
-            <button class="btn" [disabled]="busy() || runnerActive() || !stopOk()" (click)="applyStop()">Recolocar stop de {{ stopPct() }}%</button>
+            <button class="btn danger" [disabled]="!auth.canOperate() || busy()" (click)="close()">Fechar posição</button>
+            <button class="btn" [disabled]="!auth.canOperate() || busy() || runnerActive() || !stopOk()" (click)="applyStop()">Recolocar stop de {{ stopPct() }}%</button>
           </div>
         } @else {
           <div class="empty"><b>Sem posição</b>Abra uma ordem acima. Ela aparece aqui e em Trades quando fechar.</div>
@@ -102,6 +103,7 @@ const MAX_QTY = 0.05;
     }`,
 })
 export class TicketPage {
+  protected readonly auth = inject(AuthService);
   private readonly api = inject(ApiService);
   private readonly store = inject(StatusStore);
   private readonly toast = inject(ToastService);
@@ -123,7 +125,7 @@ export class TicketPage {
   protected readonly qtyOk = computed(() => this.qty() >= CONTRACT && this.qty() <= MAX_QTY);
   protected readonly stopOk = computed(() => (this.stopPct() ?? 0) >= 0.1 && (this.stopPct() ?? 0) <= 20);
   protected readonly contracts = computed(() => Math.round(this.qty() / CONTRACT));
-  protected readonly canOpen = computed(() => !this.busy() && !this.runnerActive() && this.qtyOk() && !this.pos());
+  protected readonly canOpen = computed(() => this.auth.canOperate() && !this.busy() && !this.runnerActive() && this.qtyOk() && !this.pos());
 
   protected readonly pos = computed(() => this.lastPos() ?? null);
   protected readonly posLabel = computed(() => { const p = this.pos(); return p ? (p.side > 0 ? 'LONG' : 'SHORT') : 'sem posição'; });
@@ -136,7 +138,7 @@ export class TicketPage {
   protected readonly stopTone = computed<Tone>(() => { const p = this.pos(); return !p ? '' : p.stop ? 'ok' : 'bad'; });
 
   constructor() {
-    if (this.demoOk()) this.refresh(true);
+    if (this.demoOk() && this.auth.canOperate()) this.refresh(true);
   }
 
   protected refresh(silent = false): void {

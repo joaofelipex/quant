@@ -1,5 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { ApiService } from '../core/api.service';
+import { AuthService } from '../core/auth.service';
 import { runAction } from '../core/action';
 import { filterLog, fmt, logTone, LogFilter, pct, tone } from '../core/format';
 import { StatusStore } from '../core/status.store';
@@ -19,7 +20,7 @@ import { ToastService } from '../shared/toast';
     .chk app-icon{flex:none}`,
   template: `
     <app-page-head title="Saúde" subtitle="Testes automáticos da VM, serviços e log do runner">
-      <button class="btn" [disabled]="busy()" (click)="run()"><app-icon name="refresh" [size]="16" /> Rodar agora</button>
+      <button class="btn" [disabled]="!auth.canOperate() || busy()" (click)="run()"><app-icon name="refresh" [size]="16" /> Rodar agora</button>
     </app-page-head>
 
     @if (sc(); as sc) {
@@ -62,6 +63,7 @@ import { ToastService } from '../shared/toast';
 })
 export class HealthPage {
   private readonly store = inject(StatusStore);
+  protected readonly auth = inject(AuthService);
   private readonly api = inject(ApiService);
   private readonly toast = inject(ToastService);
   protected readonly sc = computed(() => this.store.data()?.selfcheck ?? null);
