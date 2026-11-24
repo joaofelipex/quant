@@ -9,7 +9,6 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tsmom_cripto"))
@@ -65,7 +64,8 @@ def main() -> None:
     dsr = deflated_sharpe_ratio(ho, N_TRIALS)
     lo5, hi95, p_le0 = base.block_bootstrap_sharpe(ho)
     x2 = sl(run(PRIMARY_LB, open_, close, fund, cost_bps=2 * base.COST_BPS)["net"], H)
-    rob = pd.DataFrame({f"lb{lb}": {"sharpe_dev": sharpe(sl(r["net"], D, H), PPY), "sharpe_holdout": sharpe(sl(r["net"], H), PPY)}
+    rob = pd.DataFrame({f"lb{lb}": {"sharpe_dev": sharpe(sl(r["net"], D, H), PPY),
+                                    "sharpe_holdout": sharpe(sl(r["net"], H), PPY)}
                         for lb, r in res.items()}).T
     loo = {}
     for s in base.SYMBOLS:
