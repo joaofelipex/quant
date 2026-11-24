@@ -103,3 +103,118 @@ def test_resumo_do_paper_da_carteira(tmp_path):
 def test_saude_sem_systemctl_nao_quebra(monkeypatch):
     monkeypatch.setattr(control, "_run", lambda *a, **k: "")
     assert control.service_health() == {"uptime_s": None, "restarts": None, "memory_mb": None}
+
+
+class FakeRun:
+    def __init__(self, rc=0, err=""):
+        self.calls, self.rc, self.err = [], rc, err
+
+    def __call__(self, cmd):
+        self.calls.append(cmd)
+        return type("R", (), {"returncode": self.rc, "stderr": self.err})()
+
+
+@pytest.fixture
+def ctl(tmp_path):
+    state, kill, rt, run = tmp_path / "s.json", tmp_path / "KILL", tmp_path / "runtime.env", FakeRun()
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), control.make_handler(state, kill, rt, run))
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    yield f"http://127.0.0.1:{srv.server_address[1]}", kill, rt, run
+    srv.shutdown()
+
+
+H = {"X-Quant-Control": "1"}
+
+
+def post(url, body=None, headers=H):
+    req = urllib.request.Request(url, method="POST", headers={**(headers or {}), "Content-Type": "application/json"},
+                                 data=json.dumps(body).encode() if body is not None else b"")
+    try:
+        with urllib.request.urlopen(req) as r:
+            return r.status, json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        return e.code, json.loads(e.read())
+
+
+def test_acoes_do_runner_chamam_so_o_systemctl_da_unit(ctl):
+    base, kill, rt, run = ctl
+    for verb in ("start", "stop", "restart"):
+        assert post(f"{base}/api/runner/{verb}")[0] == 200
+    assert run.calls == [["systemctl", v, "quant-live"] for v in ("start", "stop", "restart")]
+    assert post(f"{base}/api/runner/enable")[0] == 404 and len(run.calls) == 3
+
+
+def test_acoes_exigem_o_cabecalho_anti_csrf(ctl):
+    base, kill, rt, run = ctl
+    assert post(f"{base}/api/runner/stop", headers={})[0] == 403 and not run.calls
+    assert post(f"{base}/api/settings", {"QUANT_QTY": "0.5"}, headers={})[0] == 403 and not rt.exists()
+
+
+def test_com_kill_nao_liga_mas_para(ctl):
+    base, kill, rt, run = ctl
+    kill.write_text("x")
+    code, body = post(f"{base}/api/runner/start")
+    assert code == 409 and "KILL" in body["erro"] and not run.calls
+    assert post(f"{base}/api/runner/restart")[0] == 409
+    assert post(f"{base}/api/runner/stop")[0] == 200
+
+
+def test_falha_do_systemctl_vira_409_com_motivo(ctl):
+    base, kill, rt, run = ctl
+    run.rc, run.err = 1, "Access denied"
+    code, body = post(f"{base}/api/runner/start")
+    assert code == 409 and body["erro"] == "Access denied"
+
+
+def test_parametros_validados_e_gravados_sem_segredos(ctl):
+    base, kill, rt, run = ctl
+    code, body = post(f"{base}/api/settings", {"QUANT_MODE": "testnet", "QUANT_QTY": "0.02", "QUANT_TIMEFRAME": "5m"})
+    assert code == 200 and body["restart_needed"] is True
+    assert control.read_runtime(rt) == {"QUANT_MODE": "testnet", "QUANT_QTY": "0.02", "QUANT_TIMEFRAME": "5m"}
+    assert json.loads(call(f"{base}/api/settings")[1])["saved"]["QUANT_QTY"] == "0.02"
+
+
+@pytest.mark.parametrize("body", [
+    {"QUANT_MODE": "live"},                      # live nunca pelo navegador
+    {"QUANT_VENUE": "polymarket"},               # sem testnet: so por edicao na VM
+    {"BINANCE_API_SECRET": "x"},                 # chaves nunca
+    {"QUANT_QTY": "10"}, {"QUANT_QTY": "0"}, {"QUANT_QTY": "abc"}, {"QUANT_QTY": "nan"},
+    {"QUANT_MAX_DAILY_LOSS": "-5"}, {"QUANT_STOP_ATR": "99"}, {"QUANT_TIMEFRAME": "1s"},
+    {"QUANT_ALLOW_MAINNET": "yes-i-know"}, [1, 2],
+])
+def test_parametros_invalidos_sao_recusados_sem_gravar(ctl, body):
+    base, kill, rt, run = ctl
+    code, _ = post(f"{base}/api/settings", body)
+    assert code == 400 and not rt.exists()
+
+
+def test_atualizacao_parcial_preserva_os_outros_parametros(tmp_path):
+    rt = tmp_path / "r.env"
+    control.write_runtime(rt, {"QUANT_QTY": "0.05", "QUANT_MODE": "paper"})
+    control.write_runtime(rt, {"QUANT_QTY": "0.01"})
+    assert control.read_runtime(rt) == {"QUANT_QTY": "0.01", "QUANT_MODE": "paper"}
+
+
+def test_polkit_so_libera_a_unit_do_runner_e_as_tres_acoes():
+    root = Path(__file__).resolve().parents[1] / "deploy"
+    rule = (root / "50-quant-control.rules").read_text()
+    assert 'subject.user === "quant"' in rule and 'quant-live.service' in rule
+    assert '["start", "stop", "restart"]' in rule and "manage-unit-files" not in rule
+    live = (root / "quant-live.service").read_text()
+    assert live.index("EnvironmentFile=/etc/quant-live.env") < live.index("EnvironmentFile=-/var/lib/quant/runtime.env")
+    assert "runtime.env" in (root / "quant-control.service").read_text()
+
+
+def test_script_da_pagina_tem_sintaxe_js_valida(tmp_path):
+    import re
+    import shutil
+    import subprocess
+
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node nao instalado")
+    html = Path(control.__file__).with_name("control.html").read_text(encoding="utf-8")
+    js = tmp_path / "pagina.js"
+    js.write_text(re.search(r"<script>(.*)</script>", html, re.S).group(1), encoding="utf-8")
+    r = subprocess.run([node, "--check", str(js)], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr

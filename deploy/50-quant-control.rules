@@ -1,0 +1,11 @@
+// /etc/polkit-1/rules.d/50-quant-control.rules
+// Deixa o usuario `quant` (servico quant-control) ligar/parar/reiniciar SO a unit quant-live.service.
+// Nao autoriza nenhuma outra unit nem enable/disable de arquivos de unit.
+polkit.addRule(function (action, subject) {
+    if (subject.user === "quant" &&
+        action.id === "org.freedesktop.systemd1.manage-units" &&
+        action.lookup("unit") === "quant-live.service" &&
+        ["start", "stop", "restart"].indexOf(action.lookup("verb")) !== -1) {
+        return polkit.Result.YES;
+    }
+});

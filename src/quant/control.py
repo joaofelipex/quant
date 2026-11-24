@@ -3,8 +3,10 @@
     QUANT_STATE=/var/lib/quant/live_state.json QUANT_KILL_FILE=/var/lib/quant/KILL python -m quant.control
 
 Escuta so em 127.0.0.1 (o nginx faz proxy em /controle/). Biblioteca padrao apenas. O que ele PODE fazer: ler o estado
-do runner, ler o journal e criar o arquivo KILL. O que NAO faz, de proposito: ligar o runner, enviar ordem, mudar
-parametro, apagar o KILL (retomar depois de um kill e decisao humana, ver deploy/README.md) ou ler chaves.
+do runner e o journal, criar o arquivo KILL, ligar/parar/reiniciar o servico do runner (polkit restrito a essa unit) e
+gravar parametros VALIDADOS num arquivo proprio (``runtime.env``, sem segredos). O que NAO faz, de proposito:
+enviar ordem, aceitar modo ``live`` ou Polymarket (so por edicao na VM), apagar o KILL (retomar depois de kill e decisao
+humana, ver deploy/README.md), ler ou gravar chaves.
 """
 from __future__ import annotations
 
@@ -19,8 +21,78 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 SERVICE = "quant-live"
-ENV_WHITELIST = ("QUANT_MODE", "QUANT_SYMBOL", "QUANT_TIMEFRAME", "QUANT_QTY", "QUANT_MAX_DAILY_LOSS",
+ENV_WHITELIST = ("QUANT_MODE", "QUANT_VENUE", "QUANT_SYMBOL", "QUANT_TIMEFRAME", "QUANT_QTY", "QUANT_MAX_DAILY_LOSS",
                  "QUANT_STOP_ATR", "QUANT_TESTNET_KIND")
+RUNTIME_ENV = Path("/var/lib/quant/runtime.env")
+VERBS = ("start", "stop", "restart")
+
+
+class SettingError(ValueError):
+    pass
+
+
+def _enum(*opts):
+    def check(v: str) -> str:
+        if v not in opts:
+            raise SettingError(f"valor invalido {v!r}; use um de {', '.join(opts)}")
+        return v
+    return check
+
+
+def _num(lo: float, hi: float):
+    def check(v: str) -> str:
+        try:
+            x = float(v)
+        except ValueError:
+            raise SettingError(f"{v!r} nao e numero") from None
+        if not (lo < x <= hi) or math.isnan(x):
+            raise SettingError(f"{v} fora do intervalo ({lo}, {hi}]")
+        return format(x, "g")
+    return check
+
+
+# so o que o navegador pode mudar; live e polymarket (sem testnet) ficam de fora de proposito
+SETTINGS = {
+    "QUANT_MODE": _enum("paper", "testnet"),
+    "QUANT_VENUE": _enum("binance", "kalshi"),
+    "QUANT_TIMEFRAME": _enum("1m", "5m", "15m", "1h"),
+    "QUANT_QTY": _num(0, 1.0),
+    "QUANT_MAX_DAILY_LOSS": _num(0, 1000),
+    "QUANT_STOP_ATR": _num(0, 10),
+}
+
+
+def read_runtime(path: Path) -> dict[str, str]:
+    try:
+        lines = path.read_text().splitlines()
+    except OSError:
+        return {}
+    return dict(line.split("=", 1) for line in lines if "=" in line and not line.startswith("#"))
+
+
+def write_runtime(path: Path, updates: dict) -> dict[str, str]:
+    """Valida (whitelist + tipos + faixas) e grava de forma atomica; levanta SettingError sem gravar nada."""
+    unknown = set(updates) - set(SETTINGS)
+    if unknown:
+        raise SettingError(f"parametro nao permitido: {', '.join(sorted(unknown))}")
+    clean = {k: SETTINGS[k](str(v).strip()) for k, v in updates.items()}
+    merged = {**read_runtime(path), **clean}
+    tmp = path.with_suffix(".tmp")
+    body = "".join(f"{k}={v}" + chr(10) for k, v in sorted(merged.items()))
+    tmp.write_text("# gerado por quant.control; sem segredos" + chr(10) + body)
+    tmp.replace(path)
+    return merged
+
+
+def runner_action(verb: str, kill_file: Path, run=None) -> dict:
+    """start/stop/restart do servico do runner. Com KILL presente nao liga: retomar e decisao humana."""
+    if verb not in VERBS:
+        raise SettingError(f"acao invalida {verb!r}")
+    if verb in ("start", "restart") and kill_file.exists():
+        return {"ok": False, "erro": "arquivo KILL presente: revise a posicao e remova-o na VM antes de ligar"}
+    run = run or (lambda cmd: subprocess.run(cmd, capture_output=True, text=True, timeout=30))
+    r = run(["systemctl", verb, SERVICE])
+    return {"ok": r.returncode == 0, "erro": (r.stderr or "").strip()[:300] if r.returncode else ""}
 PAGE = Path(__file__).with_name("control.html")
 
 
@@ -146,7 +218,7 @@ def trigger_kill(kill_file: Path) -> bool:
     return kill_file.exists()
 
 
-def make_handler(state_path: Path, kill_file: Path):
+def make_handler(state_path: Path, kill_file: Path, runtime_path: Path = RUNTIME_ENV, run=None):
     class Handler(BaseHTTPRequestHandler):
         server_version = "quant-control"
         sys_version = ""
@@ -169,6 +241,10 @@ def make_handler(state_path: Path, kill_file: Path):
                 self._send(200, PAGE.read_bytes(), "text/html; charset=utf-8")
             elif path == "/api/status":
                 self._json(200, build_status(state_path, kill_file))
+            elif path == "/api/settings":
+                self._json(200, {"saved": read_runtime(runtime_path), "effective": runner_config(),
+                                 "options": {"QUANT_MODE": ["paper", "testnet"], "QUANT_VENUE": ["binance", "kalshi"],
+                                             "QUANT_TIMEFRAME": ["1m", "5m", "15m", "1h"]}})
             else:
                 self._json(404, {"erro": "nao encontrado"})
 
@@ -176,9 +252,25 @@ def make_handler(state_path: Path, kill_file: Path):
             # o navegador manda a senha do nginx sozinho: o cabecalho proprio barra CSRF (so JS da mesma origem)
             if self.headers.get("X-Quant-Control") != "1":
                 return self._json(403, {"erro": "cabecalho X-Quant-Control ausente"})
-            if self.path.split("?")[0] == "/api/kill":
+            path = self.path.split("?")[0]
+            if path == "/api/kill":
                 ok = trigger_kill(kill_file)
                 return self._json(200 if ok else 500, {"kill_file": ok})
+            if path.startswith("/api/runner/"):
+                try:
+                    res = runner_action(path.rsplit("/", 1)[1], kill_file, run)
+                except SettingError as e:
+                    return self._json(404, {"ok": False, "erro": str(e)})
+                return self._json(200 if res["ok"] else 409, res)
+            if path == "/api/settings":
+                try:
+                    n = int(self.headers.get("Content-Length") or 0)
+                    body = json.loads(self.rfile.read(min(n, 4096)) or b"{}")
+                    if not isinstance(body, dict):
+                        raise SettingError("corpo deve ser um objeto JSON")
+                    return self._json(200, {"saved": write_runtime(runtime_path, body), "restart_needed": True})
+                except (SettingError, ValueError) as e:
+                    return self._json(400, {"erro": str(e)})
             self._json(404, {"erro": "nao encontrado"})
 
         def log_message(self, fmt, *args):  # noqa: A002
@@ -191,7 +283,8 @@ def main() -> None:
     state = Path(os.environ.get("QUANT_STATE", "live_state.json"))
     kill = Path(os.environ.get("QUANT_KILL_FILE", "KILL"))
     port = int(os.environ.get("QUANT_CONTROL_PORT", "8765"))
-    srv = ThreadingHTTPServer(("127.0.0.1", port), make_handler(state, kill))
+    runtime = Path(os.environ.get("QUANT_RUNTIME_ENV", str(RUNTIME_ENV)))
+    srv = ThreadingHTTPServer(("127.0.0.1", port), make_handler(state, kill, runtime))
     print(f"quant.control em 127.0.0.1:{port} (estado={state}, kill={kill})", flush=True)
     srv.serve_forever()
 

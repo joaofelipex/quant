@@ -30,6 +30,11 @@ pre .l{display:block}pre .e{color:var(--bad)}pre .w2{color:var(--warn)}pre .t{co
 button,select{font:inherit}
 button.kill{font-weight:600;padding:10px 18px;border-radius:8px;border:1px solid var(--bad);background:transparent;color:var(--bad);cursor:pointer}
 button.kill:hover{background:var(--bad);color:#fff}button:disabled{opacity:.4;cursor:default}
+button.act{font-weight:600;padding:8px 16px;border-radius:8px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer}
+button.act:hover{background:var(--accent);color:#fff}
+label.f{display:flex;flex-direction:column;gap:2px;font-size:12px;color:var(--mute)}
+input{font:inherit;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:5px 8px;width:100%}
+.msg{font-size:13px;margin-top:8px;min-height:1.2em}
 select{background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:3px 6px;font-size:13px}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px}.note{color:var(--mute);font-size:13px;margin-top:10px}
 @media(max-width:520px){.w{grid-template-columns:64px 1fr 60px}.v{font-size:17px}}
@@ -69,6 +74,25 @@ select{background:var(--card);color:var(--ink);border:1px solid var(--line);bord
     <div class="card"><div class="k">PnL do último dia</div><div class="v" id="ppnl">—</div></div>
   </div>
   <div class="card" style="margin-top:10px"><svg id="eqchart" viewBox="0 0 800 140" role="img" aria-label="equity do paper"></svg><div id="weights"></div></div>
+
+  <h2>Operação do runner</h2>
+  <div class="row">
+    <button class="act" id="b-start">Ligar</button>
+    <button class="act" id="b-restart">Reiniciar</button>
+    <button class="act" id="b-stop">Parar</button>
+  </div>
+  <div class="grid" id="settings" style="margin-top:8px">
+    <label class="f">modo<select id="s-QUANT_MODE"></select></label>
+    <label class="f">corretora<select id="s-QUANT_VENUE"></select></label>
+    <label class="f">timeframe<select id="s-QUANT_TIMEFRAME"></select></label>
+    <label class="f">quantidade (ativo)<input id="s-QUANT_QTY" inputmode="decimal"></label>
+    <label class="f">perda máxima/dia<input id="s-QUANT_MAX_DAILY_LOSS" inputmode="decimal"></label>
+    <label class="f">stop (× ATR)<input id="s-QUANT_STOP_ATR" inputmode="decimal"></label>
+  </div>
+  <div class="row" style="margin-top:8px"><button class="act" id="b-save">Salvar e reiniciar</button></div>
+  <div class="msg" id="msg"></div>
+  <p class="note">Modo <b>live</b> e Polymarket não podem ser ligados por aqui (só por edição na VM). <b>testnet</b> e Kalshi exigem
+  chaves já gravadas na VM. Salvar grava os parâmetros e reinicia o runner; não envia ordens por conta própria.</p>
 
   <h2>Kill-switch</h2>
   <button id="kill" class="kill">Acionar kill-switch</button>
@@ -214,6 +238,46 @@ $('kill').addEventListener('click', async () => {
   } catch (e) { alert('falhou: ' + e.message); }
   refresh();
 });
+
+
+const KEYS = ['QUANT_MODE', 'QUANT_VENUE', 'QUANT_TIMEFRAME', 'QUANT_QTY', 'QUANT_MAX_DAILY_LOSS', 'QUANT_STOP_ATR'];
+const say = (t, cls) => { const m = $('msg'); m.textContent = t; m.className = 'msg ' + (cls || ''); };
+async function api(path, body) {
+  const r = await fetch(path, {method: 'POST', headers: {'X-Quant-Control': '1', 'Content-Type': 'application/json'}, body: body ? JSON.stringify(body) : undefined});
+  let j = {}; try { j = await r.json(); } catch (e) { /* sem corpo */ }
+  if (!r.ok) throw new Error(j.erro || r.status);
+  return j;
+}
+async function loadSettings() {
+  const d = await (await fetch('api/settings', {cache: 'no-store'})).json();
+  const cur = Object.assign({}, d.effective, d.saved);
+  KEYS.forEach(k => {
+    const el = $('s-' + k);
+    if (el.tagName === 'SELECT') {
+      clear(el); (d.options[k] || []).forEach(o => { const op = document.createElement('option'); op.value = op.textContent = o; el.appendChild(op); });
+      if (cur[k] && !(d.options[k] || []).includes(cur[k])) { const op = document.createElement('option'); op.value = op.textContent = cur[k]; el.appendChild(op); }
+    }
+    if (cur[k] != null) el.value = cur[k];
+  });
+}
+async function act(verb, label) {
+  if (verb !== 'start' && !confirm(label + ' o runner?')) return;
+  say('executando…');
+  try { await api('api/runner/' + verb); say('ok: ' + label.toLowerCase(), 'ok'); } catch (e) { say('falhou: ' + e.message, 'bad'); }
+  refresh();
+}
+$('b-start').addEventListener('click', () => act('start', 'Ligar'));
+$('b-restart').addEventListener('click', () => act('restart', 'Reiniciar'));
+$('b-stop').addEventListener('click', () => act('stop', 'Parar'));
+$('b-save').addEventListener('click', async () => {
+  const body = {}; KEYS.forEach(k => { const v = $('s-' + k).value.trim(); if (v) body[k] = v; });
+  if (!confirm('Salvar estes parâmetros e reiniciar o runner?' + String.fromCharCode(10) + JSON.stringify(body, null, 1))) return;
+  say('salvando…');
+  try { await api('api/settings', body); await api('api/runner/restart'); say('salvo e reiniciado', 'ok'); }
+  catch (e) { say('falhou: ' + e.message, 'bad'); }
+  loadSettings(); refresh();
+});
+loadSettings();
 
 document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
 refresh();
