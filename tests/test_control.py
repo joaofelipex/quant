@@ -12,7 +12,9 @@ from quant import control
 
 
 @pytest.fixture
-def server(tmp_path):
+def server(tmp_path, monkeypatch):
+    # isola do host: na VM o runner real (mesmo usuario) tem QUANT_ASSETS no ambiente e mudaria o que o status le
+    monkeypatch.setattr(control, "runner_config", lambda *a: {})
     state, kill = tmp_path / "live_state.json", tmp_path / "KILL"
     state.write_text(json.dumps({"last_bar": "2026-01-01 00:00:00", "stop": None, "entry": None,
                                  "risk": {"halted": False, "pnl": 0.0, "trades": 0}, "executor": {"pos": None}}))
