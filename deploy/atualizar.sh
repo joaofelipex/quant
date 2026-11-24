@@ -22,9 +22,10 @@ fail() { status erro "$1"; echo "ERRO: $1" >&2; exit 1; }
 
 [ -f "$IN" ] || fail "nenhum pacote em $IN (rode deploy/enviar-pacote.sh no seu computador)"
 status rodando "validando o pacote"
-tar -tzf "$IN" >/dev/null 2>&1 || fail "pacote corrompido"
-if tar -tzf "$IN" | grep -Eq '(^/|(^|/)\.\.(/|$))'; then fail "pacote com caminho absoluto ou '..' (recusado)"; fi
-tar -tzf "$IN" | sed 's#^\./##' | grep -q '^src/quant/__init__.py$' || fail "pacote sem src/quant (nao parece o projeto)"
+# a listagem vai para uma variavel: 'tar | grep -q' com pipefail falha por SIGPIPE quando o grep sai cedo (pacote grande)
+lista="$(tar -tzf "$IN" 2>/dev/null)" || fail "pacote corrompido"
+if grep -Eq '(^/|(^|/)\.\.(/|$))' <<<"$lista"; then fail "pacote com caminho absoluto ou '..' (recusado)"; fi
+grep -Eqx '(\./)?src/quant/__init__\.py' <<<"$lista" || fail "pacote sem src/quant (nao parece o projeto)"
 
 rm -rf "$STG"; mkdir -p "$STG"; tar -xzf "$IN" -C "$STG"
 PYTHONPATH="$STG/src" "$PY" -c "import quant,sys; assert quant.__file__.startswith(sys.argv[1]), quant.__file__" "$STG" \

@@ -214,11 +214,13 @@ class TestAtualizar:
     def status(self, tmp_path):
         return json.loads((tmp_path / "data" / "deploy.json").read_text())
 
-    def fake_project(self, tmp_path, *, passing=True):
+    def fake_project(self, tmp_path, *, passing=True, filler=0):
         src = tmp_path / "pkg" / "src" / "quant"
         (src / "live").mkdir(parents=True)
         for mod in ("__init__", "control", "alerts", "selfcheck", "live/__init__", "live/config"):
             (src / f"{mod}.py").write_text("")
+        for i in range(filler):  # listagem maior que o buffer do pipe (64 KB): pegaria o SIGPIPE do 'grep -q'
+            (tmp_path / "pkg" / f"arquivo_de_enchimento_com_nome_longo_{i:05d}.txt").write_text("x")
         body = "True" if passing else "False"
         (tmp_path / "pkg" / "test_x.py").write_text(f"def test_ok():\n    assert {body}\n")
         pkg = tmp_path / "data" / "inbox" / "quant.tar.gz"
@@ -237,8 +239,9 @@ class TestAtualizar:
         assert r.returncode != 0 and self.status(tmp_path)["state"] == "erro"
         assert not (tmp_path / "app" / "src").exists()  # nada foi aplicado
 
-    def test_pacote_bom_e_aplicado_com_backup_e_reverte(self, tmp_path):
-        self.fake_project(tmp_path)
+    @pytest.mark.parametrize("filler", [0, 3000])
+    def test_pacote_bom_e_aplicado_com_backup_e_reverte(self, tmp_path, filler):
+        self.fake_project(tmp_path, filler=filler)
         (tmp_path / "app" / "antigo.txt").write_text("v1")
         r = self.run_script(tmp_path)
         assert r.returncode == 0, r.stdout + r.stderr
