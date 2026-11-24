@@ -126,3 +126,17 @@ Os dois scripts **recusam** `QUANT_MODE=live`.
 Pare o serviço, confira a posição na corretora, edite `risk.halted` para `false` em `/var/lib/quant/live_state.json`
 (ou apague o arquivo, **só se não houver posição aberta**: com posição e sem estado o runner trava por "posição
 órfã"), depois `rm /var/lib/quant/KILL && systemctl start quant-live`.
+
+## 4. Painel de controle (`/controle/`)
+
+Estado ao vivo do runner, ligar/parar/reiniciar, parametros validados e kill-switch, atras do mesmo HTTPS + senha do painel.
+
+```bash
+sudo cp deploy/quant-control.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable --now quant-control
+sudo install -m 0644 -o root -g root deploy/50-quant-control.rules /etc/polkit-1/rules.d/    # so quant-live: start/stop/restart
+sudo cp deploy/nginx-quant.conf /etc/nginx/sites-available/quant.mixco.com.br && sudo nginx -t && sudo systemctl reload nginx
+```
+
+- Parametros salvos pelo painel vao para `/var/lib/quant/runtime.env` (sem segredos, so whitelist validada) e vencem o `/etc/quant-live.env`.
+- **Nao** da para ligar `live` nem Polymarket pelo navegador, nem apagar o `KILL`: isso so por edicao na VM.
+- Com `KILL` presente o painel recusa ligar/reiniciar (409).
