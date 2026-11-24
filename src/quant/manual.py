@@ -132,7 +132,7 @@ def execute(req: dict, ex, *, price_fn, kill_file: Path | None = None, trades_pa
             save_basis(ex.export_state())
         aviso = _protect(ex, fill.side, fill.qty, fill.price, req.get("stop_pct"), StopRejected, KalshiError)
         side = "COMPRA" if fill.side > 0 else "VENDA"
-        res = {"ok": True, "msg": f"{side} executada: {fill.qty:.4f} @ {fill.price:.2f}",
+        res = {"ok": True, "msg": f"{side} executada: {fill.qty:g} @ {fill.price:.6g}",
                "position": _position_view(ex, price)}
         if aviso:
             res["aviso"] = aviso

@@ -81,6 +81,12 @@ class TestExecute:
         assert side == -1 and qty == 0.01 and price == pytest.approx(1980.0)  # 1% abaixo da entrada
         assert r["position"]["side"] == 1 and r["position"]["stop"] is True
 
+    def test_mensagem_mostra_preco_de_ativo_barato_sem_arredondar_para_zero(self, tmp_path):
+        barato = run({"action": "open", "side": 1, "asset": "DOGE", "usd": 25}, FakeEx(), tmp_path, price=0.0551)
+        assert barato["msg"].endswith("@ 0.0551")
+        caro = run({"action": "open", "side": 1, "qty": 0.01}, FakeEx(), tmp_path, price=1689.85)
+        assert caro["msg"].endswith("0.01 @ 1689.85")
+
     def test_abre_short_com_stop_acima(self, tmp_path):
         ex = FakeEx()
         run({"action": "open", "side": -1, "qty": 0.01, "stop_pct": 2}, ex, tmp_path)
