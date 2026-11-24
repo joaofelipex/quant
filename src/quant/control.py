@@ -187,6 +187,13 @@ def portfolio_summary(log_path: Path, n: int = 60) -> dict | None:
             "weights": {k[2:]: num(v) for k, v in last.items() if k.startswith("w_")}}
 
 
+def read_selfcheck(path: Path) -> dict | None:
+    try:
+        return json.loads(path.read_text())
+    except (OSError, ValueError):
+        return None
+
+
 def build_status(state_path: Path, kill_file: Path, *, now: float | None = None) -> dict:
     now = time.time() if now is None else now
     state = read_state(state_path)
@@ -205,6 +212,7 @@ def build_status(state_path: Path, kill_file: Path, *, now: float | None = None)
         "kill_file": kill_file.exists(),
         "config": cfg,
         "health": service_health(now=now),
+        "selfcheck": read_selfcheck(Path(os.environ.get("QUANT_SELFCHECK", "selfcheck.json"))),
         "portfolio": portfolio_summary(Path(os.environ.get("QUANT_PORT_LOG", "portfolio_log.csv"))),
         "state": state,
         "last_bar_age_s": last_bar_age,
@@ -256,6 +264,11 @@ def make_handler(state_path: Path, kill_file: Path, runtime_path: Path = RUNTIME
             if path == "/api/kill":
                 ok = trigger_kill(kill_file)
                 return self._json(200 if ok else 500, {"kill_file": ok})
+            if path == "/api/selfcheck/run":
+                run_ = run or (lambda cmd: subprocess.run(cmd, capture_output=True, text=True, timeout=30))
+                r = run_(["systemctl", "start", "--no-block", "quant-selfcheck.service"])
+                ok = r.returncode == 0
+                return self._json(200 if ok else 409, {"ok": ok, "erro": "" if ok else (r.stderr or "").strip()[:300]})
             if path.startswith("/api/runner/"):
                 try:
                     res = runner_action(path.rsplit("/", 1)[1], kill_file, run)

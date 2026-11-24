@@ -1,0 +1,10 @@
+[Unit]
+Description=quant autoverificacao a cada 6 horas
+
+[Timer]
+OnCalendar=*-*-* 00:35,06:35,12:35,18:35
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

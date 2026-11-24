@@ -198,7 +198,7 @@ def test_atualizacao_parcial_preserva_os_outros_parametros(tmp_path):
 def test_polkit_so_libera_a_unit_do_runner_e_as_tres_acoes():
     root = Path(__file__).resolve().parents[1] / "deploy"
     rule = (root / "50-quant-control.rules").read_text()
-    assert 'subject.user === "quant"' in rule and 'quant-live.service' in rule
+    assert 'subject.user !== "quant"' in rule and 'unit === "quant-live.service"' in rule
     assert '["start", "stop", "restart"]' in rule and "manage-unit-files" not in rule
     live = (root / "quant-live.service").read_text()
     assert live.index("EnvironmentFile=/etc/quant-live.env") < live.index("EnvironmentFile=-/var/lib/quant/runtime.env")
@@ -218,3 +218,26 @@ def test_script_da_pagina_tem_sintaxe_js_valida(tmp_path):
     js.write_text(re.search(r"<script>(.*)</script>", html, re.S).group(1), encoding="utf-8")
     r = subprocess.run([node, "--check", str(js)], capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
+
+
+def test_selfcheck_aparece_no_status_e_pode_ser_disparado(ctl, tmp_path, monkeypatch):
+    base, kill, rt, run = ctl
+    report = tmp_path / "sc.json"
+    report.write_text(json.dumps({"ok": True, "at": "2026-11-24T00:00:00+00:00", "tests": None, "checks": [],
+                                  "paper": None}))
+    monkeypatch.setenv("QUANT_SELFCHECK", str(report))
+    assert json.loads(call(base + "/api/status")[1])["selfcheck"]["ok"] is True
+    assert post(f"{base}/api/selfcheck/run", headers={})[0] == 403
+    assert post(f"{base}/api/selfcheck/run")[0] == 200
+    assert run.calls[-1] == ["systemctl", "start", "--no-block", "quant-selfcheck.service"]
+    monkeypatch.setenv("QUANT_SELFCHECK", str(tmp_path / "nao.json"))
+    assert json.loads(call(base + "/api/status")[1])["selfcheck"] is None
+
+
+def test_polkit_inclui_selfcheck_so_com_start():
+    rule = (Path(__file__).resolve().parents[1] / "deploy" / "50-quant-control.rules").read_text()
+    assert 'unit === "quant-selfcheck.service" && verb === "start"' in rule
+    timer = (Path(__file__).resolve().parents[1] / "deploy" / "quant-selfcheck.timer").read_text()
+    svc = (Path(__file__).resolve().parents[1] / "deploy" / "quant-selfcheck.service").read_text()
+    assert "OnCalendar" in timer and "quant-live.env" not in "\n".join(
+        ln for ln in svc.splitlines() if not ln.startswith("#"))

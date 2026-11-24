@@ -1,0 +1,23 @@
+[Unit]
+Description=quant autoverificacao: pytest + saude da VM + avaliacao do paper (relatorio para o painel)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=quant
+WorkingDirectory=/opt/quant
+# sem chaves: NAO le /etc/quant-live.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=QUANT_SELFCHECK=/var/lib/quant/selfcheck.json
+Environment=QUANT_PORT_LOG=/var/lib/quant/portfolio_log.csv
+Environment=QUANT_KILL_FILE=/var/lib/quant/KILL
+ExecStart=/opt/quant/.venv/bin/python -m quant.selfcheck
+TimeoutStartSec=1200
+Nice=10
+
+StateDirectory=quant
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/quant

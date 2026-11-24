@@ -75,6 +75,17 @@ select{background:var(--card);color:var(--ink);border:1px solid var(--line);bord
   </div>
   <div class="card" style="margin-top:10px"><svg id="eqchart" viewBox="0 0 800 140" role="img" aria-label="equity do paper"></svg><div id="weights"></div></div>
 
+  <h2>Testes automáticos da VM</h2>
+  <div class="grid">
+    <div class="card"><div class="k">última verificação</div><div class="v" id="sc-st">—</div><div class="s" id="sc-at">—</div></div>
+    <div class="card"><div class="k">suite pytest</div><div class="v" id="sc-tests">—</div><div class="s" id="sc-secs">—</div></div>
+    <div class="card"><div class="k">paper da carteira</div><div class="v" id="sc-paper">—</div><div class="s" id="sc-paper2">—</div></div>
+  </div>
+  <div id="sc-checks" class="card" style="margin-top:10px"></div>
+  <div class="row" style="margin-top:8px"><button class="act" id="b-selfcheck">Rodar agora</button><span class="sub" id="sc-msg"></span></div>
+  <p class="note">Roda sozinha a cada 6 h: pytest, saúde dos serviços e avaliação do paper. Só lê e testa; não altera serviços nem usa chaves.
+  O veredito do paper só vale depois de ~12 meses (regra do repo).</p>
+
   <h2>Operação do runner</h2>
   <div class="row">
     <button class="act" id="b-start">Ligar</button>
@@ -158,6 +169,26 @@ function drawEquity(series, weights) {
   });
 }
 
+
+function drawSelfcheck(sc) {
+  const box = $('sc-checks'); clear(box);
+  if (!sc) { set('sc-st', 'sem relatório'); $('sc-at').textContent = 'aguardando a primeira execução'; return; }
+  set('sc-st', sc.ok ? 'tudo certo' : 'FALHOU', sc.ok ? 'ok' : 'bad');
+  $('sc-at').textContent = new Date(sc.at).toLocaleString('pt-BR');
+  const t = sc.tests;
+  if (t) { set('sc-tests', `${t.passed} ok · ${t.failed} falhas`, t.ok ? 'ok' : 'bad'); $('sc-secs').textContent = `${t.seconds} s` + (t.failures.length ? ' · ' + t.failures.join(', ') : ''); }
+  const p = sc.paper;
+  if (p) { set('sc-paper', p.sharpe == null ? 'sem Sharpe' : 'Sharpe ' + fmt(p.sharpe), p.sharpe > 0 ? 'ok' : ''); $('sc-paper2').textContent = `${p.days} dia(s) · ret ${pct(p.ret_total)} · DD ${pct(p.max_dd)} · ${p.verdict}`; }
+  (sc.checks || []).forEach(c => { const r = document.createElement('div'); r.className = 's';
+    const a = document.createElement('span'); a.textContent = (c.ok ? '✔ ' : '✘ ') + c.name; a.className = c.ok ? 'ok' : 'bad';
+    const b = document.createElement('span'); b.textContent = '  ' + c.detail; r.append(a, b); box.appendChild(r); });
+}
+$('b-selfcheck').addEventListener('click', async () => {
+  $('sc-msg').textContent = 'disparando…';
+  try { await api('api/selfcheck/run'); $('sc-msg').textContent = 'em execução; atualiza em ~1 min'; }
+  catch (e) { $('sc-msg').textContent = 'falhou: ' + e.message; }
+});
+
 let lastLog = [];
 function drawLog() {
   const f = $('filter').value, pre = $('log'); clear(pre);
@@ -224,6 +255,7 @@ async function refresh() {
     drawEquity(p.series, p.weights);
   } else { set('peq', 'sem dados'); $('peqs').textContent = ''; set('ppnl', '—'); drawEquity([], {}); }
 
+  drawSelfcheck(d.selfcheck);
   lastLog = d.log || []; drawLog();
   $('kill').disabled = !!d.kill_file;
 }
