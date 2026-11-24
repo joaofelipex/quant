@@ -1,0 +1,10 @@
+[Unit]
+Description=quant alertas a cada minuto
+
+[Timer]
+OnCalendar=*-*-* *:*:00
+AccuracySec=10s
+Persistent=false
+
+[Install]
+WantedBy=timers.target

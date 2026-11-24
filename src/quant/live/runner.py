@@ -11,6 +11,7 @@ Garantias (cada uma tem teste em ``tests/test_live_robustez.py``):
 """
 from __future__ import annotations
 
+import csv
 import json
 import logging
 import time
@@ -28,6 +29,7 @@ log = logging.getLogger("quant.live")
 # estrategia: barras canonicas -> DataFrame com colunas ``signal`` (+1/-1/0) e ``atr`` (como no backtest)
 SignalFn = Callable[[pd.DataFrame], pd.DataFrame]
 
+TRADE_FIELDS = ["ts", "origem", "side", "qty", "entrada", "saida", "pnl", "motivo"]
 RETRY_DELAY_S = 5.0  # apos erro num passo, tenta de novo logo (a barra ainda nao foi marcada como processada)
 
 
@@ -39,11 +41,14 @@ class Runner:
     def __init__(self, feed: Feed, executor: Executor, risk: RiskManager, signals: SignalFn, *, qty: float,
                  timeframe: str = "5m", stop_atr: float = 2.0, warmup: int = 300,
                  state_path: str | Path = "live_state.json", kill_file: str | Path = "KILL",
-                 now_fn: Callable[[], pd.Timestamp] = _utc_now):
+                 now_fn: Callable[[], pd.Timestamp] = _utc_now, trades_path: str | Path | None = None,
+                 label: str = ""):
         self.feed, self.executor, self.risk, self.signals = feed, executor, risk, signals
         self.qty, self.stop_atr, self.warmup = qty, stop_atr, warmup
         self.bar_s = TIMEFRAME_SECONDS[timeframe]
         self.state_path, self.kill_file, self.now_fn = Path(state_path), Path(kill_file), now_fn
+        self.trades_path = Path(trades_path) if trades_path else None
+        self.label = label  # ex.: "kalshi/testnet"; vai em cada linha do historico de trades
         self.last_bar: pd.Timestamp | None = None
         self.stop: float | None = None  # preco do stop (software e, se houver, corretora)
         self.stop_dist: float | None = None  # distancia do stop, para recalcular a partir do preco real de entrada
@@ -74,6 +79,21 @@ class Runner:
         if pos is None:
             self.stop = self.stop_dist = self.entry = None
 
+    def _record_trade(self, ts: pd.Timestamp, side: int, qty: float, entry: float, exit_: float, pnl: float,
+                      why: str) -> None:
+        """Acrescenta o trade fechado ao historico CSV (nunca derruba o runner se o disco falhar)."""
+        if self.trades_path is None:
+            return
+        try:
+            new = not self.trades_path.exists()
+            with self.trades_path.open("a", newline="") as f:
+                w = csv.writer(f)
+                if new:
+                    w.writerow(TRADE_FIELDS)
+                w.writerow([str(ts), self.label, side, f"{qty:.6f}", f"{entry:.4f}", f"{exit_:.4f}", f"{pnl:.4f}", why])
+        except OSError:
+            log.exception("nao consegui gravar o historico de trades")
+
     # ---- ordens -----------------------------------------------------------------------------------------------
     def _cancel_stops(self) -> None:
         try:
@@ -90,6 +110,7 @@ class Runner:
             return
         pnl = (fill.price - pos.entry) * pos.side * pos.qty - fill.fee  # taxa de entrada nao rastreada: aproximacao
         self.risk.record_trade(pnl, ts)
+        self._record_trade(ts, pos.side, pos.qty, pos.entry, fill.price, pnl, why)
         log.info("saida (%s) @ %.4f pnl=%.2f", why, fill.price, pnl)
 
     def _protect(self, side: int, qty: float, ts: pd.Timestamp) -> bool:
@@ -112,6 +133,8 @@ class Runner:
                 e = self.entry
                 pnl = (float(self.stop) - e["price"]) * e["side"] * e["qty"]  # estimativa: saiu no stop
                 self.risk.record_trade(pnl, now)
+                self._record_trade(now, e["side"], e["qty"], e["price"], float(self.stop), pnl,
+                                   "stop da corretora (estimado)")
                 log.warning("posicao fechada fora do runner (stop da corretora?); pnl estimado %.2f", pnl)
                 self._cancel_stops()
             self.stop = self.stop_dist = self.entry = None  # inclui entrada que nao chegou a preencher

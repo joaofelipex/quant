@@ -1,0 +1,16 @@
+[Unit]
+Description=quant atualiza o codigo a partir do pacote da caixa de entrada (testa antes, com backup)
+
+[Service]
+Type=oneshot
+User=quant
+WorkingDirectory=/opt/quant
+ExecStart=/bin/bash /opt/quant/deploy/atualizar.sh
+TimeoutStartSec=1200
+Nice=10
+StateDirectory=quant
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/quant /opt/quant

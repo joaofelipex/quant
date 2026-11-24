@@ -12,6 +12,10 @@ Environment=QUANT_KILL_FILE=/var/lib/quant/KILL
 Environment=QUANT_PORT_LOG=/var/lib/quant/portfolio_log.csv
 Environment=QUANT_SELFCHECK=/var/lib/quant/selfcheck.json
 Environment=QUANT_RUNTIME_ENV=/var/lib/quant/runtime.env
+Environment=QUANT_TRADES_LOG=/var/lib/quant/trades.csv
+Environment=QUANT_DEPLOY_STATUS=/var/lib/quant/deploy.json
+Environment=QUANT_ALERT_ENV=/etc/quant/alert.env
+Environment=QUANT_ALERT_STATE=/var/lib/quant/alerts_state.json
 Environment=QUANT_CONTROL_PORT=8765
 ExecStart=/opt/quant/.venv/bin/python -m quant.control
 Restart=on-failure

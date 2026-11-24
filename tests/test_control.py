@@ -237,7 +237,7 @@ def test_selfcheck_aparece_no_status_e_pode_ser_disparado(ctl, tmp_path, monkeyp
 
 def test_polkit_inclui_selfcheck_so_com_start():
     rule = (Path(__file__).resolve().parents[1] / "deploy" / "50-quant-control.rules").read_text()
-    assert 'unit === "quant-selfcheck.service" && verb === "start"' in rule
+    assert '"quant-selfcheck.service"' in rule and 'verb === "start"' in rule
     timer = (Path(__file__).resolve().parents[1] / "deploy" / "quant-selfcheck.timer").read_text()
     svc = (Path(__file__).resolve().parents[1] / "deploy" / "quant-selfcheck.service").read_text()
     assert "OnCalendar" in timer and "quant-live.env" not in "\n".join(

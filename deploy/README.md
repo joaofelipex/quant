@@ -140,3 +140,37 @@ sudo cp deploy/nginx-quant.conf /etc/nginx/sites-available/quant.mixco.com.br &&
 - Parametros salvos pelo painel vao para `/var/lib/quant/runtime.env` (sem segredos, so whitelist validada) e vencem o `/etc/quant-live.env`.
 - **Nao** da para ligar `live` nem Polymarket pelo navegador, nem apagar o `KILL`: isso so por edicao na VM.
 - Com `KILL` presente o painel recusa ligar/reiniciar (409).
+
+## 5. Gestão da VM pelo painel (histórico, alertas, atualização)
+
+Instalação (uma vez, e de novo se as units mudarem):
+
+```bash
+sudo cp deploy/quant-alert.service deploy/quant-alert.timer deploy/quant-deploy.service deploy/quant-rollback.service \
+        deploy/quant-live.service deploy/quant-control.service /etc/systemd/system/
+sudo install -m 0644 deploy/50-quant-control.rules /etc/polkit-1/rules.d/
+sudo systemctl daemon-reload && sudo systemctl enable --now quant-alert.timer && sudo systemctl restart quant-control
+```
+
+**Histórico de trades:** o runner grava cada trade fechado em `/var/lib/quant/trades.csv` (corretora/modo, lado, preços,
+PnL, motivo). O painel mostra curva, acerto, pior queda e os últimos trades, e o CSV baixa em `/controle/api/trades.csv`.
+O PnL de saída por stop da corretora é uma estimativa (o runner não vê o preço real do fill do gatilho).
+
+**Alertas (Telegram e/ou e-mail):** o `quant-alert.timer` roda a cada minuto e só avisa quando algo MUDA (runner ligou/parou/falhou,
+trava de risco, kill-switch, autoverificação, trade novo). O segredo fica num arquivo que **você** grava na VM:
+
+```bash
+sudo install -d -m 750 -o root -g quant /etc/quant
+sudo install -m 640 -o root -g quant /dev/null /etc/quant/alert.env && sudo nano /etc/quant/alert.env
+#   QUANT_ALERT_TELEGRAM_TOKEN=...   (bot do @BotFather)
+#   QUANT_ALERT_TELEGRAM_CHAT=...    (seu chat id)
+#   opcional e-mail: QUANT_ALERT_SMTP_HOST / _PORT / _USER / _PASS / _FROM / _TO
+```
+
+O botão "Enviar alerta de teste" do painel confirma o canal. O painel nunca mostra o token (só o nome do canal).
+
+**Atualizar o código pelo painel:** o painel **não recebe código pela web**. No seu computador, na raiz do repo:
+`deploy/enviar-pacote.sh CAMINHO_DA_CHAVE_SSH` (empacota o `HEAD` e põe em `/var/lib/quant/inbox/` por SSH). No painel,
+"Atualizar código": a VM valida o pacote (sem caminhos suspeitos), roda a suite **numa cópia de staging**, faz backup
+(`/var/lib/quant/backups`, guarda 5), aplica e confere que importa; se algo falhar, restaura sozinha. Depois reinicie o
+runner para usar o código novo. "Reverter" volta ao último backup. O polkit libera só `start` dessas units e o restart do painel.

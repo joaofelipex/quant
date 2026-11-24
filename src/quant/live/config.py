@@ -81,7 +81,8 @@ def build_runner() -> Runner:
     feed = build_feed(mode, symbol, tfm, kind, env("QUANT_FEED", "auto"), venue)
     return Runner(feed, executor, risk, signals, qty=qty,
                   timeframe=tfm, stop_atr=float(env("QUANT_STOP_ATR", "2.0")),
-                  state_path=env("QUANT_STATE", "live_state.json"), kill_file=env("QUANT_KILL_FILE", "KILL"))
+                  state_path=env("QUANT_STATE", "live_state.json"), kill_file=env("QUANT_KILL_FILE", "KILL"),
+                  trades_path=env("QUANT_TRADES_LOG") or None, label=f"{venue}/{mode}")
 
 
 def main() -> None:

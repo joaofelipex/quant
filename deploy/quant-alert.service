@@ -1,0 +1,24 @@
+[Unit]
+Description=quant alertas (Telegram/e-mail) quando algo muda: runner, risco, selfcheck, trades
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=quant
+WorkingDirectory=/opt/quant
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=QUANT_STATE=/var/lib/quant/live_state.json
+Environment=QUANT_KILL_FILE=/var/lib/quant/KILL
+Environment=QUANT_SELFCHECK=/var/lib/quant/selfcheck.json
+Environment=QUANT_TRADES_LOG=/var/lib/quant/trades.csv
+Environment=QUANT_ALERT_STATE=/var/lib/quant/alerts_state.json
+# o token/senha ficam em /etc/quant/alert.env (640 root:quant), gravado por voce; nao ha EnvironmentFile aqui
+Environment=QUANT_ALERT_ENV=/etc/quant/alert.env
+ExecStart=/opt/quant/.venv/bin/python -m quant.alerts
+TimeoutStartSec=60
+StateDirectory=quant
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/quant

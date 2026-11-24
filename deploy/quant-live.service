@@ -15,6 +15,7 @@ EnvironmentFile=/etc/quant-live.env
 # parametros ajustados pelo painel de controle (sem segredos); vem depois e tem precedencia
 EnvironmentFile=-/var/lib/quant/runtime.env
 Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=QUANT_TRADES_LOG=/var/lib/quant/trades.csv
 ExecStart=/opt/quant/.venv/bin/python -m quant.live.config
 # religa SO se cair por erro; o kill-switch encerra com codigo 0 e o servico fica parado
 Restart=on-failure

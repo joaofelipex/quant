@@ -187,6 +187,67 @@ def portfolio_summary(log_path: Path, n: int = 60) -> dict | None:
             "weights": {k[2:]: num(v) for k, v in last.items() if k.startswith("w_")}}
 
 
+def trades_summary(path: Path, n: int = 200) -> dict:
+    """Historico de trades fechados do runner (CSV gravado por quant.live.runner): linhas, total, acerto, curva."""
+    try:
+        rows = list(csv.DictReader(path.read_text().splitlines()))
+    except OSError:
+        rows = []
+    trades = []
+    for r in rows:
+        try:
+            trades.append({"ts": r["ts"], "origem": r.get("origem", ""), "side": int(r["side"]), "qty": float(r["qty"]),
+                           "entrada": float(r["entrada"]), "saida": float(r["saida"]), "pnl": float(r["pnl"]),
+                           "motivo": r.get("motivo", "")})
+        except (KeyError, ValueError):
+            continue
+    cum, curve = 0.0, []
+    for t in trades:
+        cum += t["pnl"]
+        curve.append([t["ts"], round(cum, 6)])
+    wins = sum(1 for t in trades if t["pnl"] > 0)
+    peak, mdd = 0.0, 0.0
+    for _, c in curve:
+        peak = max(peak, c)
+        mdd = min(mdd, c - peak)
+    return {"count": len(trades), "pnl_total": round(cum, 6), "wins": wins,
+            "win_rate": (wins / len(trades)) if trades else None, "max_dd": round(mdd, 6),
+            "trades": trades[-n:][::-1], "curve": curve[-n:]}
+
+
+def venues_status(key_exists=os.path.exists) -> dict:
+    """O que o painel consegue afirmar sobre cada corretora (sem ler nenhuma chave)."""
+    kalshi_key = "/etc/quant/kalshi-demo.key"
+    return {"binance": {"modos": ["paper", "testnet"], "credencial": "em /etc/quant-live.env (o painel nao le)"},
+            "kalshi": {"modos": ["paper", "testnet"], "credencial": "chave presente" if key_exists(kalshi_key)
+                       else f"FALTA {kalshi_key}"},
+            "polymarket": {"modos": [], "credencial": "so por edicao na VM (live, fora do Brasil/EUA)"}}
+
+
+def deploy_status(status_path: Path, inbox: Path) -> dict:
+    """Ultima atualizacao (escrita por deploy/atualizar.sh) e se ha pacote esperando na caixa de entrada."""
+    st = read_state(status_path)
+    pkg = None
+    try:
+        s = inbox.stat()
+        pkg = {"bytes": s.st_size, "mtime": s.st_mtime}
+    except OSError:
+        pass
+    return {"last": st, "pacote": pkg}
+
+
+def alerts_status(env_path: Path, state_path: Path) -> dict:
+    """Canais de alerta configurados (so os nomes; nunca o token) e quando o watcher rodou pela ultima vez."""
+    from . import alerts
+
+    st = read_state(state_path)
+    try:
+        mtime = state_path.stat().st_mtime
+    except OSError:
+        mtime = None
+    return {"canais": alerts.channels(alerts.load_env(env_path)), "ultima_checagem": mtime, "estado": st}
+
+
 def read_selfcheck(path: Path) -> dict | None:
     try:
         return json.loads(path.read_text())
@@ -213,6 +274,12 @@ def build_status(state_path: Path, kill_file: Path, *, now: float | None = None)
         "config": cfg,
         "health": service_health(now=now),
         "selfcheck": read_selfcheck(Path(os.environ.get("QUANT_SELFCHECK", "selfcheck.json"))),
+        "deploy": deploy_status(Path(os.environ.get("QUANT_DEPLOY_STATUS", "deploy.json")),
+                                Path(os.environ.get("QUANT_INBOX", "/var/lib/quant/inbox/quant.tar.gz"))),
+        "alerts": alerts_status(Path(os.environ.get("QUANT_ALERT_ENV", "/etc/quant/alert.env")),
+                                Path(os.environ.get("QUANT_ALERT_STATE", "alerts_state.json"))),
+        "trades": trades_summary(Path(os.environ.get("QUANT_TRADES_LOG", "trades.csv")), 30),
+        "venues": venues_status(),
         "portfolio": portfolio_summary(Path(os.environ.get("QUANT_PORT_LOG", "portfolio_log.csv"))),
         "state": state,
         "last_bar_age_s": last_bar_age,
@@ -249,6 +316,14 @@ def make_handler(state_path: Path, kill_file: Path, runtime_path: Path = RUNTIME
                 self._send(200, PAGE.read_bytes(), "text/html; charset=utf-8")
             elif path == "/api/status":
                 self._json(200, build_status(state_path, kill_file))
+            elif path == "/api/trades":
+                self._json(200, trades_summary(Path(os.environ.get("QUANT_TRADES_LOG", "trades.csv")), 500))
+            elif path == "/api/trades.csv":
+                try:
+                    body = Path(os.environ.get("QUANT_TRADES_LOG", "trades.csv")).read_bytes()
+                except OSError:
+                    body = b""
+                self._send(200, body, "text/csv; charset=utf-8")
             elif path == "/api/settings":
                 self._json(200, {"saved": read_runtime(runtime_path), "effective": runner_config(),
                                  "options": {"QUANT_MODE": ["paper", "testnet"], "QUANT_VENUE": ["binance", "kalshi"],
@@ -264,11 +339,22 @@ def make_handler(state_path: Path, kill_file: Path, runtime_path: Path = RUNTIME
             if path == "/api/kill":
                 ok = trigger_kill(kill_file)
                 return self._json(200 if ok else 500, {"kill_file": ok})
-            if path == "/api/selfcheck/run":
+            units = {"/api/selfcheck/run": "quant-selfcheck.service", "/api/deploy/run": "quant-deploy.service",
+                     "/api/deploy/rollback": "quant-rollback.service"}
+            if path in units:
                 run_ = run or (lambda cmd: subprocess.run(cmd, capture_output=True, text=True, timeout=30))
-                r = run_(["systemctl", "start", "--no-block", "quant-selfcheck.service"])
+                r = run_(["systemctl", "start", "--no-block", units[path]])
                 ok = r.returncode == 0
                 return self._json(200 if ok else 409, {"ok": ok, "erro": "" if ok else (r.stderr or "").strip()[:300]})
+            if path == "/api/alerts/test":
+                from . import alerts
+
+                cfg = alerts.load_env(Path(os.environ.get("QUANT_ALERT_ENV", "/etc/quant/alert.env")))
+                if not alerts.channels(cfg):
+                    return self._json(409, {"ok": False, "erro": "nenhum canal configurado em /etc/quant/alert.env"})
+                sent = alerts.deliver(cfg, "Alerta de teste enviado pelo painel de controle.")
+                return self._json(200 if sent else 502, {"ok": bool(sent), "canais": sent,
+                                                         "erro": "" if sent else "falha ao entregar (veja o journal)"})
             if path.startswith("/api/runner/"):
                 try:
                     res = runner_action(path.rsplit("/", 1)[1], kill_file, run)

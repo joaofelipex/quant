@@ -1,0 +1,15 @@
+[Unit]
+Description=quant reverte o codigo ao backup mais recente
+
+[Service]
+Type=oneshot
+User=quant
+WorkingDirectory=/opt/quant
+ExecStart=/bin/bash /opt/quant/deploy/reverter.sh
+TimeoutStartSec=300
+StateDirectory=quant
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/quant /opt/quant

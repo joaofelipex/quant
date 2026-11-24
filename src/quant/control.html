@@ -68,6 +68,16 @@ select{background:var(--card);color:var(--ink);border:1px solid var(--line);bord
   <h2>Preço recente · entrada e stop</h2>
   <div class="card"><svg id="chart" viewBox="0 0 800 220" role="img" aria-label="preço recente"></svg><div class="s" id="chartnote">—</div></div>
 
+  <h2>Histórico de trades e PnL</h2>
+  <div class="grid">
+    <div class="card"><div class="k">PnL acumulado</div><div class="v" id="t-pnl">—</div><div class="s" id="t-n">—</div></div>
+    <div class="card"><div class="k">acerto</div><div class="v" id="t-win">—</div></div>
+    <div class="card"><div class="k">pior queda</div><div class="v" id="t-dd">—</div></div>
+  </div>
+  <div class="card" style="margin-top:10px"><svg id="tchart" viewBox="0 0 800 120" role="img" aria-label="PnL acumulado"></svg>
+    <div id="t-table" class="s">sem trades ainda</div>
+    <div class="row" style="margin-top:8px"><a class="act" href="api/trades.csv" download="trades.csv">Baixar CSV</a></div></div>
+
   <h2>Carteira tsmom_cripto (paper)</h2>
   <div class="grid">
     <div class="card"><div class="k">equity (base 1,00)</div><div class="v" id="peq">—</div><div class="s" id="peqs">—</div></div>
@@ -100,10 +110,28 @@ select{background:var(--card);color:var(--ink);border:1px solid var(--line);bord
     <label class="f">perda máxima/dia<input id="s-QUANT_MAX_DAILY_LOSS" inputmode="decimal"></label>
     <label class="f">stop (× ATR)<input id="s-QUANT_STOP_ATR" inputmode="decimal"></label>
   </div>
+  <div id="venues" class="card" style="margin-top:8px"></div>
   <div class="row" style="margin-top:8px"><button class="act" id="b-save">Salvar e reiniciar</button></div>
   <div class="msg" id="msg"></div>
   <p class="note">Modo <b>live</b> e Polymarket não podem ser ligados por aqui (só por edição na VM). <b>testnet</b> e Kalshi exigem
   chaves já gravadas na VM. Salvar grava os parâmetros e reinicia o runner; não envia ordens por conta própria.</p>
+
+  <h2>Gestão da VM</h2>
+  <div class="grid">
+    <div class="card"><div class="k">alertas</div><div class="v" id="al-st">—</div><div class="s" id="al-sub">—</div></div>
+    <div class="card"><div class="k">atualização do código</div><div class="v" id="dp-st">—</div><div class="s" id="dp-sub">—</div></div>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <button class="act" id="b-altest">Enviar alerta de teste</button>
+    <button class="act" id="b-deploy">Atualizar código</button>
+    <button class="act" id="b-rollback">Reverter</button>
+    <span class="sub" id="gm-msg"></span>
+  </div>
+  <p class="note"><b>Alertas:</b> avisam por Telegram/e-mail quando o runner cai ou volta, a trava de risco dispara, o kill-switch é acionado,
+  a autoverificação falha ou um trade fecha. Os segredos ficam em <code>/etc/quant/alert.env</code> (você grava na VM).<br>
+  <b>Atualizar:</b> no seu computador rode <code>deploy/enviar-pacote.sh</code> (coloca o pacote na caixa de entrada da VM por SSH) e clique em
+  Atualizar. A VM testa o pacote, faz backup e só então aplica; reinicie o runner depois. <b>Reverter</b> volta ao último backup.
+  O painel não recebe código pela web.</p>
 
   <h2>Kill-switch</h2>
   <button id="kill" class="kill">Acionar kill-switch</button>
@@ -170,6 +198,45 @@ function drawEquity(series, weights) {
 }
 
 
+function drawTrades(t) {
+  const tb = $('t-table'), svg = $('tchart'); clear(svg);
+  if (!t || !t.count) { set('t-pnl', '—'); $('t-n').textContent = 'nenhum trade fechado ainda'; set('t-win', '—'); set('t-dd', '—'); tb.textContent = 'sem trades ainda'; return; }
+  set('t-pnl', fmt(t.pnl_total, 4), t.pnl_total > 0 ? 'ok' : t.pnl_total < 0 ? 'bad' : '');
+  $('t-n').textContent = t.count + ' trade(s) · últimos ' + t.trades.length + ' abaixo';
+  set('t-win', pct(t.win_rate, 0)); set('t-dd', fmt(t.max_dd, 4), t.max_dd < 0 ? 'bad' : '');
+  const pts = t.curve;
+  if (pts.length >= 2) {
+    const ys = pts.map(p => p[1]), lo = Math.min(...ys, 0), hi = Math.max(...ys, 0), pad = (hi - lo) * 0.1 || 0.001;
+    const X = i => 10 + i * 780 / (pts.length - 1), Y = v => 110 - (v - (lo - pad)) * 100 / (hi - lo + 2 * pad);
+    mk(svg, 'line', {x1: 10, x2: 790, y1: Y(0), y2: Y(0), stroke: 'var(--line)'});
+    mk(svg, 'polyline', {points: pts.map((p, i) => X(i) + ',' + Y(p[1])).join(' '), fill: 'none', stroke: 'var(--accent)', 'stroke-width': 1.8});
+  }
+  clear(tb);
+  t.trades.slice(0, 15).forEach(x => {
+    const r = document.createElement('div');
+    r.textContent = x.ts.slice(5, 16) + '  ' + (x.side > 0 ? 'long' : 'short') + '  ' + fmt(x.entrada, 2) + ' → ' + fmt(x.saida, 2) + '  pnl ' + fmt(x.pnl, 4) + '  (' + x.motivo + ')  ' + x.origem;
+    r.className = x.pnl > 0 ? 'ok' : x.pnl < 0 ? 'bad' : ''; tb.appendChild(r);
+  });
+}
+function drawGestao(a, dp) {
+  if (a) {
+    set('al-st', a.canais.length ? a.canais.join(' + ') : 'sem canal', a.canais.length ? 'ok' : 'bad');
+    $('al-sub').textContent = a.canais.length ? (a.ultima_checagem ? 'última checagem ' + new Date(a.ultima_checagem * 1000).toLocaleTimeString('pt-BR') : 'aguardando a 1ª checagem')
+      : 'grave o token em /etc/quant/alert.env na VM (ver deploy/README.md)';
+  }
+  if (dp) {
+    const l = dp.last;
+    set('dp-st', l ? (l.state === 'ok' ? 'aplicado' : l.state === 'erro' ? 'FALHOU' : 'em andamento') : 'nenhuma ainda', l && l.state === 'ok' ? 'ok' : l && l.state === 'erro' ? 'bad' : '');
+    $('dp-sub').textContent = (l ? l.msg + ' (' + l.at + ')' : '') + (dp.pacote ? ' · pacote esperando na caixa de entrada' : ' · caixa de entrada vazia');
+  }
+}
+function drawVenues(v) {
+  if (!v) return;
+  const el = $('venues'); clear(el);
+  Object.keys(v).forEach(k => { const r = document.createElement('div'); r.className = 's';
+    r.textContent = k + ': ' + (v[k].modos.length ? 'modos ' + v[k].modos.join('/') : 'fora do painel') + ' · ' + v[k].credencial; el.appendChild(r); });
+}
+
 function drawSelfcheck(sc) {
   const box = $('sc-checks'); clear(box);
   if (!sc) { set('sc-st', 'sem relatório'); $('sc-at').textContent = 'aguardando a primeira execução'; return; }
@@ -183,6 +250,15 @@ function drawSelfcheck(sc) {
     const a = document.createElement('span'); a.textContent = (c.ok ? '✔ ' : '✘ ') + c.name; a.className = c.ok ? 'ok' : 'bad';
     const b = document.createElement('span'); b.textContent = '  ' + c.detail; r.append(a, b); box.appendChild(r); });
 }
+async function gm(path, label, ask) {
+  if (ask && !confirm(ask)) return;
+  $('gm-msg').textContent = 'executando…';
+  try { const r = await api(path); $('gm-msg').textContent = label + (r.canais ? ': ' + r.canais.join(', ') : ' em execução; atualiza em ~1 min'); }
+  catch (e) { $('gm-msg').textContent = 'falhou: ' + e.message; }
+}
+$('b-altest').addEventListener('click', () => gm('api/alerts/test', 'alerta enviado'));
+$('b-deploy').addEventListener('click', () => gm('api/deploy/run', 'atualização', 'Testar o pacote da caixa de entrada e aplicar o código novo?'));
+$('b-rollback').addEventListener('click', () => gm('api/deploy/rollback', 'reversão', 'Voltar o código ao último backup?'));
 $('b-selfcheck').addEventListener('click', async () => {
   $('sc-msg').textContent = 'disparando…';
   try { await api('api/selfcheck/run'); $('sc-msg').textContent = 'em execução; atualiza em ~1 min'; }
@@ -256,6 +332,7 @@ async function refresh() {
   } else { set('peq', 'sem dados'); $('peqs').textContent = ''; set('ppnl', '—'); drawEquity([], {}); }
 
   drawSelfcheck(d.selfcheck);
+  drawTrades(d.trades); drawVenues(d.venues); drawGestao(d.alerts, d.deploy);
   lastLog = d.log || []; drawLog();
   $('kill').disabled = !!d.kill_file;
 }
