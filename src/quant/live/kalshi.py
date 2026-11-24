@@ -81,7 +81,7 @@ def _error_code(text: str) -> str | None:
 
 class KalshiPerpsExecutor(Executor):
     SLIPPAGE = 0.01          # teto de preco do limite IOC em relacao ao melhor preco do livro (1%)
-    SETTLE_TRIES = 3
+    SETTLE_TRIES = 6         # espera a posicao refletir o fill (a Kalshi demora um instante a atualizar /positions)
     SETTLE_DELAY_S = 0.5
 
     def __init__(self, ticker: str, key_id: str, private_key, *, env: str = "demo", margin_mode: str = "cross",
@@ -177,6 +177,7 @@ class KalshiPerpsExecutor(Executor):
         body = {"ticker": self.ticker, "client_order_id": uuid.uuid4().hex, "side": "bid" if side == 1 else "ask",
                 "count": f"{count:.2f}", "price": f"{limit:.4f}", "time_in_force": "immediate_or_cancel",
                 "self_trade_prevention_type": "taker_at_cross", "market_version": self.market_version}
+        before = self.position() if reduce_only else None
         if reduce_only:
             body["reduce_only"] = True
         if self.subaccount is not None:
@@ -189,7 +190,20 @@ class KalshiPerpsExecutor(Executor):
         fee = float(res.get("average_fee_paid") or 0) * filled
         if filled < count:
             log.warning("fill parcial: %s de %s contratos", filled, count)
+        self._await_position(None if before is None else max(before.qty - filled * self.unit, 0.0))
         return Fill(side, filled * self.unit, self._to_feed(avg), fee)
+
+    def _await_position(self, expect_qty: float | None) -> None:
+        """Espera /positions refletir o fill. Sem isso o runner ve 'sem posicao' logo apos abrir e apaga o estado.
+        ``expect_qty``: None = ao abrir, espera aparecer uma posicao; numero = ao reduzir, espera ficar <= ele."""
+        for i in range(self.SETTLE_TRIES):
+            pos = self.position()
+            if (pos is not None) if expect_qty is None else ((pos.qty if pos else 0.0) <= expect_qty + 1e-9):
+                return
+            if i < self.SETTLE_TRIES - 1:
+                time.sleep(self.SETTLE_DELAY_S)
+        log.warning("posicao na Kalshi nao refletiu o fill em %.1f s; o runner vai reconciliar no proximo passo",
+                    self.SETTLE_TRIES * self.SETTLE_DELAY_S)
 
     def _trigger_path(self) -> str:
         return f"/margin/{self.mode}/positions/{self.ticker}/exit_trigger"

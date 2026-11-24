@@ -55,6 +55,7 @@ def ex():
 @pytest.fixture(autouse=True)
 def no_signing(monkeypatch):
     monkeypatch.setattr(kalshi, "sign", lambda *a: "assinatura")
+    monkeypatch.setattr(kalshi.time, "sleep", lambda s: None)  # a espera pela posicao nao deve atrasar os testes
 
 
 def orders(ex):
@@ -187,3 +188,51 @@ def test_outro_erro_no_stop_continua_kalshierror_simples(ex):
 def test_trigger_cancelado_nao_conta_como_stop(ex):
     ex.http.triggers = [{"id": "t9", "status": "canceled", "stop_loss_price": "1.7000"}]
     assert ex.has_stop() is False
+
+
+class LaggyHttp(FakeHttp):
+    """/positions so reflete o fill depois de `lag` leituras (simula a demora da Kalshi)."""
+
+    def __init__(self, lag):
+        super().__init__()
+        self.lag, self.reads, self.real = lag, 0, []
+
+    def request(self, method, url, params=None, json=None, headers=None, timeout=None):
+        if url.endswith("/margin/positions"):
+            self.reads += 1
+            self.calls.append((method, "/margin/positions", params, json, headers))
+            return Resp({"positions": self.real if self.reads > self.lag else []})
+        return super().request(method, url, params=params, json=json, headers=headers, timeout=timeout)
+
+
+@pytest.fixture
+def laggy():
+    def make(lag):
+        return KalshiPerpsExecutor("KXETHPERP1", "kid", None, env="demo", session=LaggyHttp(lag), rebase=False)
+
+    return make
+
+
+def test_abrir_espera_a_posicao_aparecer(laggy):
+    ex = laggy(2)
+    ex.http.real = [{"market_ticker": "KXETHPERP1", "position": "10.00", "entry_price": "1.7175"}]
+    ex.market_order(1, 0.01, 1717.0)
+    assert ex.position() is not None
+    assert ex.http.reads >= 3  # leu ate a posicao aparecer
+
+
+def test_fechar_espera_a_posicao_sumir(laggy):
+    ex = laggy(0)
+    ex.http.real = [{"market_ticker": "KXETHPERP1", "position": "10.00", "entry_price": "1.7175"}]
+    reads = []
+    original = ex.position
+    seq = iter([original(), original(), None])  # antes: aberta; 1a leitura apos o fill: ainda aberta; depois: fechada
+    ex.position = lambda: (reads.append(1), next(seq))[1]
+    ex.market_order(-1, 0.01, 1717.0, reduce_only=True)
+    assert len(reads) == 3
+
+
+def test_sem_reflexo_nao_levanta_erro(laggy, caplog):
+    ex = laggy(10**6)
+    ex.market_order(1, 0.01, 1717.0)  # fill ok; a posicao nunca aparece: so avisa
+    assert any("nao refletiu" in r.message for r in caplog.records)
