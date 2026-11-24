@@ -1,0 +1,27 @@
+[Unit]
+Description=quant painel de controle (estado do runner + kill-switch), so em 127.0.0.1
+After=network-online.target
+
+[Service]
+User=quant
+WorkingDirectory=/opt/quant
+# NAO le /etc/quant-live.env (chaves). Mostra so as chaves QUANT_* da whitelist de quant/control.py
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=QUANT_STATE=/var/lib/quant/live_state.json
+Environment=QUANT_KILL_FILE=/var/lib/quant/KILL
+Environment=QUANT_CONTROL_PORT=8765
+ExecStart=/opt/quant/.venv/bin/python -m quant.control
+Restart=on-failure
+RestartSec=5
+# ler o journal do quant-live
+SupplementaryGroups=systemd-journal
+
+StateDirectory=quant
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/quant
+
+[Install]
+WantedBy=multi-user.target
