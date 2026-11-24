@@ -150,3 +150,40 @@ def test_env_e_modo_invalidos():
         KalshiPerpsExecutor("X", "k", None, env="outro", session=FakeHttp())
     with pytest.raises(ValueError):
         KalshiPerpsExecutor("KXETHPERP1", "k", None, margin_mode="x", session=FakeHttp())
+
+
+def _recusa(ex, code, status=400):
+    import json as _json
+
+    http = ex.http
+    original = http.request
+
+    def request(method, url, **kw):
+        if method == "PUT" and url.endswith("/exit_trigger"):
+            r = Resp({"error": {"code": code, "message": "x"}}, status)
+            r.text = _json.dumps(r.data)
+            return r
+        return original(method, url, **kw)
+
+    http.request = request
+
+
+@pytest.mark.parametrize("code", ["stop_loss_past_liquidation", "stop_loss_already_breached",
+                                  "take_profit_already_breached", "close_order_blocks_exit_trigger"])
+def test_stop_recusado_vira_stoprejected_com_o_codigo(ex, code):
+    _recusa(ex, code)
+    with pytest.raises(kalshi.StopRejected) as e:
+        ex.place_stop(-1, 0.01, 1700.0)
+    assert e.value.code == code and "stop recusado" in str(e.value)
+
+
+def test_outro_erro_no_stop_continua_kalshierror_simples(ex):
+    _recusa(ex, "internal_error", 500)
+    with pytest.raises(KalshiError) as e:
+        ex.place_stop(-1, 0.01, 1700.0)
+    assert not isinstance(e.value, kalshi.StopRejected) and e.value.code == "internal_error"
+
+
+def test_trigger_cancelado_nao_conta_como_stop(ex):
+    ex.http.triggers = [{"id": "t9", "status": "canceled", "stop_loss_price": "1.7000"}]
+    assert ex.has_stop() is False

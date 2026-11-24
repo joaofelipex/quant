@@ -14,6 +14,7 @@ Convencoes da Kalshi que o executor traduz para o resto do repo (que fala em uni
 from __future__ import annotations
 
 import base64
+import json
 import logging
 import time
 import uuid
@@ -50,7 +51,32 @@ def sign(private_key, timestamp: str, method: str, path: str) -> str:
 
 
 class KalshiError(RuntimeError):
-    pass
+    def __init__(self, msg: str, code: str | None = None):
+        super().__init__(msg)
+        self.code = code  # codigo da API (ex.: stop_loss_already_breached), quando o corpo traz um
+
+
+class StopRejected(KalshiError):
+    """A Kalshi recusou o stop protetor. O runner trata qualquer excecao de place_stop fechando a posicao e travando."""
+
+
+# codigos de rejeicao de exit trigger (docs.kalshi.com/margin) e o que cada um significa para o runner
+STOP_REJECTIONS = {
+    "stop_loss_past_liquidation": "stop alem do preco de liquidacao (posicao alavancada demais para esse stop)",
+    "stop_loss_already_breached": "preco ja passou do stop (gap): o stop dispararia na hora",
+    "take_profit_already_breached": "preco ja passou do take-profit",
+    "close_order_blocks_exit_trigger": "ha ordem de fechamento aberta que bloqueia o gatilho",
+}
+
+
+def _error_code(text: str) -> str | None:
+    try:
+        err = json.loads(text).get("error")
+    except (ValueError, AttributeError):
+        return None
+    if isinstance(err, dict):
+        return err.get("code") or err.get("details")
+    return None
 
 
 class KalshiPerpsExecutor(Executor):
@@ -90,7 +116,7 @@ class KalshiPerpsExecutor(Executor):
                             "KALSHI-ACCESS-SIGNATURE": sign(self.key, ts, method, full)})
         r = self.http.request(method, self.base + full, params=params, json=body, headers=headers, timeout=15)
         if r.status_code >= 400:
-            raise KalshiError(f"{method} {path} -> HTTP {r.status_code}: {r.text[:300]}")
+            raise KalshiError(f"{method} {path} -> HTTP {r.status_code}: {r.text[:300]}", _error_code(r.text))
         return r.json() if r.content else {}
 
     def _market(self) -> dict:
@@ -171,7 +197,13 @@ class KalshiPerpsExecutor(Executor):
     def place_stop(self, side: int, qty: float, stop_price: float) -> str | None:
         p = self._round_price(self._to_contract_price(stop_price), up=(side == 1))
         body = {"stop_loss_price": f"{p:.4f}"}
-        res = self._req("PUT", self._trigger_path(), body=body)
+        try:
+            res = self._req("PUT", self._trigger_path(), body=body)
+        except KalshiError as e:
+            reason = next((v for k, v in STOP_REJECTIONS.items() if k in (e.code or "") or k in str(e)), None)
+            if reason:
+                raise StopRejected(f"stop recusado pela Kalshi: {reason} ({e})", e.code) from e
+            raise
         return str(res.get("id") or "")
 
     def cancel_stops(self) -> None:
