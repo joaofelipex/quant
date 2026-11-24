@@ -8,7 +8,9 @@ parametro, apagar o KILL (retomar depois de um kill e decisao humana, ver deploy
 """
 from __future__ import annotations
 
+import csv
 import json
+import math
 import os
 import subprocess
 import time
@@ -74,6 +76,45 @@ def recent_closes(symbol: str, interval: str, n: int = 120, *, now: float | None
     return data
 
 
+def service_health(unit: str = SERVICE, *, now: float | None = None) -> dict:
+    """Saude do servico pelo systemd: ha quanto tempo esta ativo, reinicios e memoria."""
+    out = _run(["systemctl", "show", unit, "-p", "ActiveEnterTimestamp", "-p", "NRestarts", "-p", "MemoryCurrent"])
+    kv = dict(line.split("=", 1) for line in out.splitlines() if "=" in line)
+    uptime = None
+    try:
+        from datetime import datetime
+
+        ts = datetime.strptime(kv["ActiveEnterTimestamp"].rsplit(" ", 1)[0], "%a %Y-%m-%d %H:%M:%S").timestamp()
+        uptime = round((time.time() if now is None else now) - ts)  # o systemd mostra em UTC e a VM esta em UTC
+    except (KeyError, ValueError):
+        pass
+    mem = kv.get("MemoryCurrent", "")
+    return {"uptime_s": uptime, "restarts": int(kv["NRestarts"]) if kv.get("NRestarts", "").isdigit() else None,
+            "memory_mb": round(int(mem) / 1e6, 1) if mem.isdigit() else None}
+
+
+def portfolio_summary(log_path: Path, n: int = 60) -> dict | None:
+    """Ultimos dias do paper da carteira (equity, pnl e pesos do ultimo dia) a partir do CSV do paper."""
+    try:
+        rows = list(csv.DictReader(log_path.read_text().splitlines()))
+    except OSError:
+        return None
+    if not rows:
+        return None
+
+    def num(x):
+        try:
+            v = float(x)
+            return None if math.isnan(v) else v
+        except (TypeError, ValueError):
+            return None
+
+    last = rows[-1]
+    return {"days": len(rows), "last_date": last["date"], "equity": num(last["equity"]), "pnl": num(last["pnl"]),
+            "series": [[r["date"], num(r["equity"])] for r in rows[-n:]],
+            "weights": {k[2:]: num(v) for k, v in last.items() if k.startswith("w_")}}
+
+
 def build_status(state_path: Path, kill_file: Path, *, now: float | None = None) -> dict:
     now = time.time() if now is None else now
     state = read_state(state_path)
@@ -91,6 +132,8 @@ def build_status(state_path: Path, kill_file: Path, *, now: float | None = None)
         "service": _run(["systemctl", "is-active", SERVICE]) or "desconhecido",
         "kill_file": kill_file.exists(),
         "config": cfg,
+        "health": service_health(now=now),
+        "portfolio": portfolio_summary(Path(os.environ.get("QUANT_PORT_LOG", "portfolio_log.csv"))),
         "state": state,
         "last_bar_age_s": last_bar_age,
         "log": _run(["journalctl", "-u", SERVICE, "-n", "40", "--no-pager", "-o", "short-iso"]).splitlines()[-40:],

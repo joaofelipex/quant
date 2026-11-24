@@ -9,36 +9,47 @@
 :root{--bg:#f6f7f9;--card:#fff;--ink:#14181f;--mute:#5d6674;--line:#e3e6ea;--accent:#1f6feb;--ok:#15803d;--bad:#b91c1c;--warn:#b45309}
 @media(prefers-color-scheme:dark){:root{--bg:#0e1116;--card:#161b22;--ink:#e6edf3;--mute:#8b949e;--line:#2b323c;--accent:#58a6ff;--ok:#4ade80;--bad:#f87171;--warn:#fbbf24}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
-main{max-width:920px;margin:0 auto;padding:24px 16px 48px}
-h1{font-size:22px;margin:0}h2{font-size:13px;margin:28px 0 10px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute)}
-.top{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;justify-content:space-between}
+main{max-width:980px;margin:0 auto;padding:20px 16px 56px}
+h1{font-size:21px;margin:0}h2{font-size:12px;margin:26px 0 8px;text-transform:uppercase;letter-spacing:.07em;color:var(--mute)}
+.top{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:baseline;justify-content:space-between}
 a{color:var(--accent)}.sub{color:var(--mute);font-size:13px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-top:14px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
-.k{font-size:12px;color:var(--mute)}.v{font-size:20px;font-weight:600;font-variant-numeric:tabular-nums;word-break:break-word}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--mute);margin-right:6px;vertical-align:baseline}
+.dot.on{background:var(--ok)}.dot.off{background:var(--bad)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:11px 14px}
+.k{font-size:12px;color:var(--mute)}.v{font-size:19px;font-weight:600;font-variant-numeric:tabular-nums;word-break:break-word}.s{font-size:12px;color:var(--mute)}
 .ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}
-.banner{margin-top:14px;padding:10px 14px;border-radius:10px;border:1px solid var(--line);background:var(--card);font-weight:600}
-pre{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;overflow:auto;max-height:340px;font-size:12px;line-height:1.45;margin:0}
-button{font:inherit;font-weight:600;padding:10px 18px;border-radius:8px;border:1px solid var(--bad);background:transparent;color:var(--bad);cursor:pointer}
-button:hover{background:var(--bad);color:#fff}button:disabled{opacity:.4;cursor:default}
-.note{color:var(--mute);font-size:13px;margin-top:10px}
+.banner{margin:14px 0 0;padding:10px 14px;border-radius:10px;border:1px solid var(--line);background:var(--card);font-weight:600}
+.banner.ok{border-color:var(--ok)}.banner.bad{border-color:var(--bad)}.banner.warn{border-color:var(--warn)}
+svg{display:block;width:100%;height:auto}
+.w{display:grid;grid-template-columns:78px 1fr 70px;gap:8px;align-items:center;font-size:13px;padding:2px 0}
+.track{position:relative;height:10px;background:var(--line);border-radius:4px}.mid{position:absolute;left:50%;top:-2px;width:1px;height:14px;background:var(--mute)}
+.bar{position:absolute;top:0;height:100%;border-radius:4px}
+pre{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;overflow:auto;max-height:340px;font-size:12px;line-height:1.5;margin:0;white-space:pre-wrap;word-break:break-word}
+pre .l{display:block}pre .e{color:var(--bad)}pre .w2{color:var(--warn)}pre .t{color:var(--accent)}
+button,select{font:inherit}
+button.kill{font-weight:600;padding:10px 18px;border-radius:8px;border:1px solid var(--bad);background:transparent;color:var(--bad);cursor:pointer}
+button.kill:hover{background:var(--bad);color:#fff}button:disabled{opacity:.4;cursor:default}
+select{background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:3px 6px;font-size:13px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px}.note{color:var(--mute);font-size:13px;margin-top:10px}
+@media(max-width:520px){.w{grid-template-columns:64px 1fr 60px}.v{font-size:17px}}
 </style>
 </head>
 <body>
 <main>
   <div class="top">
-    <h1>quant · controle do runner</h1>
-    <span class="sub"><a href="/">painel do paper</a> · atualizado <span id="upd">—</span></span>
+    <h1>quant · controle</h1>
+    <span class="sub"><span id="dot" class="dot"></span><span id="conn">conectando…</span> · <a href="/">painel do paper</a></span>
   </div>
 
   <div id="banner" class="banner">carregando…</div>
 
   <h2>Runner</h2>
   <div class="grid">
-    <div class="card"><div class="k">serviço</div><div class="v" id="svc">—</div></div>
-    <div class="card"><div class="k">modo</div><div class="v" id="mode">—</div></div>
-    <div class="card"><div class="k">símbolo · timeframe</div><div class="v" id="sym">—</div></div>
-    <div class="card"><div class="k">última barra processada</div><div class="v" id="bar">—</div></div>
+    <div class="card"><div class="k">serviço</div><div class="v" id="svc">—</div><div class="s" id="svcs">—</div></div>
+    <div class="card"><div class="k">modo</div><div class="v" id="mode">—</div><div class="s" id="modes">—</div></div>
+    <div class="card"><div class="k">símbolo · timeframe</div><div class="v" id="sym">—</div><div class="s" id="syms">—</div></div>
+    <div class="card"><div class="k">última barra processada</div><div class="v" id="bar">—</div><div class="s" id="bars">—</div></div>
   </div>
 
   <h2>Posição e risco</h2>
@@ -49,66 +60,119 @@ button:hover{background:var(--bad);color:#fff}button:disabled{opacity:.4;cursor:
     <div class="card"><div class="k">trava de risco</div><div class="v" id="halt">—</div></div>
   </div>
 
-  <h2>Preço (últimas barras) · entrada e stop do runner</h2>
-  <div class="card"><svg id="chart" viewBox="0 0 800 220" width="100%" role="img" aria-label="preço recente"></svg>
-  <div class="k" id="chartnote">—</div></div>
+  <h2>Preço recente · entrada e stop</h2>
+  <div class="card"><svg id="chart" viewBox="0 0 800 220" role="img" aria-label="preço recente"></svg><div class="s" id="chartnote">—</div></div>
+
+  <h2>Carteira tsmom_cripto (paper)</h2>
+  <div class="grid">
+    <div class="card"><div class="k">equity (base 1,00)</div><div class="v" id="peq">—</div><div class="s" id="peqs">—</div></div>
+    <div class="card"><div class="k">PnL do último dia</div><div class="v" id="ppnl">—</div></div>
+  </div>
+  <div class="card" style="margin-top:10px"><svg id="eqchart" viewBox="0 0 800 140" role="img" aria-label="equity do paper"></svg><div id="weights"></div></div>
 
   <h2>Kill-switch</h2>
-  <button id="kill">Acionar kill-switch</button>
+  <button id="kill" class="kill">Acionar kill-switch</button>
   <p class="note">Fecha a posição, cancela os stops e para o runner de vez. Não liga nada nem envia ordens: para retomar é preciso
   rever a posição e remover o arquivo KILL na VM (<code>deploy/README.md</code>).</p>
 
-  <h2>Log do runner (últimas 40 linhas)</h2>
+  <h2>Log do runner</h2>
+  <div class="row"><label class="sub">mostrar <select id="filter"><option value="all">tudo</option><option value="key">ordens, avisos e erros</option><option value="err">só avisos e erros</option></select></label></div>
   <pre id="log">—</pre>
 </main>
 <script>
 const $ = id => document.getElementById(id);
-const set = (id, text, cls) => { const e = $(id); e.textContent = text; e.className = 'v' + (cls ? ' ' + cls : ''); };
+const set = (id, text, cls) => { const e = $(id); e.textContent = text; e.className = e.className.replace(/\b(ok|bad|warn)\b/g, '').trim() + (cls ? ' ' + cls : ''); };
 const fmt = (x, d = 2) => x == null ? '—' : Number(x).toLocaleString('pt-BR', {minimumFractionDigits: d, maximumFractionDigits: d});
+const pct = (x, d = 2) => x == null ? '—' : (x >= 0 ? '+' : '') + (x * 100).toFixed(d).replace('.', ',') + '%';
+const ns = 'http://www.w3.org/2000/svg';
+function mk(svg, t, a) { const e = document.createElementNS(ns, t); for (const k in a) e.setAttribute(k, a[k]); svg.appendChild(e); return e; }
+function clear(el) { while (el.firstChild) el.removeChild(el.firstChild); }
 
-function age(s) {
-  if (s == null) return '';
-  if (s < 90) return ` (${s}s atrás)`;
-  if (s < 5400) return ` (${Math.round(s / 60)} min atrás)`;
-  return ` (${fmt(s / 3600, 1)} h atrás)`;
+function dur(s) {
+  if (s == null) return '—';
+  if (s < 90) return s + ' s'; if (s < 5400) return Math.round(s / 60) + ' min';
+  if (s < 172800) return fmt(s / 3600, 1) + ' h'; return fmt(s / 86400, 1) + ' d';
 }
 
-
 function drawChart(bars, entry, stop) {
-  const svg = $('chart'); while (svg.firstChild) svg.removeChild(svg.firstChild);
-  const ns = 'http://www.w3.org/2000/svg', mk = (t, a) => { const e = document.createElementNS(ns, t); for (const k in a) e.setAttribute(k, a[k]); svg.appendChild(e); return e; };
+  const svg = $('chart'); clear(svg);
   if (!bars || bars.length < 2) { $('chartnote').textContent = 'sem barras (feed público indisponível)'; return; }
   const ys = bars.map(b => b[1]).concat([entry, stop].filter(v => v != null));
   const lo = Math.min(...ys), hi = Math.max(...ys), pad = (hi - lo) * 0.08 || 1;
   const X = i => 10 + i * 780 / (bars.length - 1), Y = v => 210 - (v - (lo - pad)) * 200 / (hi - lo + 2 * pad);
-  mk('polyline', {points: bars.map((b, i) => X(i) + ',' + Y(b[1])).join(' '), fill: 'none', stroke: 'var(--accent)', 'stroke-width': 1.6});
-  const line = (v, color, label) => { if (v == null) return; mk('line', {x1: 10, x2: 790, y1: Y(v), y2: Y(v), stroke: color, 'stroke-dasharray': '5 4'});
-    const t = mk('text', {x: 14, y: Y(v) - 4, fill: color, 'font-size': 11}); t.textContent = label + ' ' + fmt(v); };
+  mk(svg, 'polyline', {points: bars.map((b, i) => X(i) + ',' + Y(b[1])).join(' '), fill: 'none', stroke: 'var(--accent)', 'stroke-width': 1.6});
+  const line = (v, color, label) => { if (v == null) return; mk(svg, 'line', {x1: 10, x2: 790, y1: Y(v), y2: Y(v), stroke: color, 'stroke-dasharray': '5 4'});
+    const t = mk(svg, 'text', {x: 14, y: Y(v) - 4, fill: color, 'font-size': 11}); t.textContent = label + ' ' + fmt(v); };
   line(entry, 'var(--ok)', 'entrada'); line(stop, 'var(--bad)', 'stop');
-  const last = bars[bars.length - 1][1];
-  $('chartnote').textContent = `${bars.length} barras · último ${fmt(last)} · mín ${fmt(lo)} · máx ${fmt(hi)}`;
+  const t0 = new Date(bars[0][0]).toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'});
+  const t1 = new Date(bars[bars.length - 1][0]).toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'});
+  const last = bars[bars.length - 1][1], first = bars[0][1];
+  $('chartnote').textContent = `${t0} → ${t1} · último ${fmt(last)} (${pct(last / first - 1)} na janela) · mín ${fmt(lo)} · máx ${fmt(hi)}`;
 }
 
+function drawEquity(series, weights) {
+  const svg = $('eqchart'), wd = $('weights'); clear(svg); clear(wd);
+  const pts = (series || []).filter(p => p[1] != null);
+  if (pts.length >= 2) {
+    const ys = pts.map(p => p[1]), lo = Math.min(...ys, 1), hi = Math.max(...ys, 1), pad = (hi - lo) * 0.1 || 0.001;
+    const X = i => 10 + i * 780 / (pts.length - 1), Y = v => 130 - (v - (lo - pad)) * 120 / (hi - lo + 2 * pad);
+    mk(svg, 'line', {x1: 10, x2: 790, y1: Y(1), y2: Y(1), stroke: 'var(--line)'});
+    mk(svg, 'polyline', {points: pts.map((p, i) => X(i) + ',' + Y(p[1])).join(' '), fill: 'none', stroke: 'var(--accent)', 'stroke-width': 1.8});
+  }
+  const names = Object.keys(weights || {});
+  const mx = Math.max(0.0001, ...names.map(n => Math.abs(weights[n] || 0)));
+  names.forEach(n => {
+    const v = weights[n], row = document.createElement('div'); row.className = 'w';
+    const a = document.createElement('span'); a.textContent = n.replace('USDT', '');
+    const tr = document.createElement('div'); tr.className = 'track';
+    const m = document.createElement('div'); m.className = 'mid'; tr.appendChild(m);
+    const b = document.createElement('div'); b.className = 'bar';
+    const w = Math.abs(v || 0) / mx * 50; b.style.width = w + '%'; b.style.left = (v >= 0 ? 50 : 50 - w) + '%';
+    b.style.background = v >= 0 ? 'var(--ok)' : 'var(--bad)'; tr.appendChild(b);
+    const c = document.createElement('span'); c.textContent = pct(v, 1); c.style.textAlign = 'right';
+    row.append(a, tr, c); wd.appendChild(row);
+  });
+}
+
+let lastLog = [];
+function drawLog() {
+  const f = $('filter').value, pre = $('log'); clear(pre);
+  const isErr = l => /\b(ERROR|WARNING|CRITICAL|Traceback)\b/.test(l);
+  const isKey = l => isErr(l) || /entrada|saida|saída|fechad|stop|kill|bloquead|perda|ordem|fill/i.test(l);
+  const lines = lastLog.filter(l => f === 'all' || (f === 'err' ? isErr(l) : isKey(l)));
+  if (!lines.length) { pre.textContent = '(sem linhas para este filtro)'; return; }
+  lines.forEach(l => { const s = document.createElement('span'); s.className = 'l ' + (/\b(ERROR|CRITICAL|Traceback)\b/.test(l) ? 'e' : /WARNING/.test(l) ? 'w2' : ''); s.textContent = l; pre.appendChild(s); });
+  pre.scrollTop = pre.scrollHeight;
+}
+$('filter').addEventListener('change', drawLog);
+
+let okAt = 0;
 async function refresh() {
+  if (document.hidden) return;
   let d;
   try {
     const r = await fetch('api/status', {cache: 'no-store'});
     if (!r.ok) throw new Error(r.status);
-    d = await r.json();
+    d = await r.json(); okAt = Date.now();
   } catch (e) {
-    $('banner').textContent = 'sem resposta do serviço de controle (' + e.message + ')';
-    $('banner').className = 'banner bad';
-    return;
+    $('dot').className = 'dot off'; $('conn').textContent = 'sem conexão (' + e.message + ')';
+    $('banner').textContent = 'sem resposta do serviço de controle — os dados abaixo podem estar desatualizados';
+    $('banner').className = 'banner bad'; document.title = '[sem conexão] quant · controle'; return;
   }
-  const s = d.state || {}, risk = s.risk || {}, ex = s.executor || {}, cfg = d.config || {};
-  $('upd').textContent = new Date(d.now * 1000).toLocaleTimeString('pt-BR');
+  const s = d.state || {}, risk = s.risk || {}, ex = s.executor || {}, cfg = d.config || {}, h = d.health || {};
+  $('dot').className = 'dot on'; $('conn').textContent = 'ao vivo · ' + new Date(d.now * 1000).toLocaleTimeString('pt-BR');
 
   const active = d.service === 'active';
   set('svc', d.service, active ? 'ok' : 'bad');
+  $('svcs').textContent = `ativo há ${dur(h.uptime_s)} · ${h.restarts ?? '—'} reinício(s) · ${h.memory_mb ?? '—'} MB`;
   set('mode', cfg.QUANT_MODE || '—', cfg.QUANT_MODE === 'paper' ? '' : 'warn');
-  set('sym', (cfg.QUANT_SYMBOL || '—') + ' · ' + (cfg.QUANT_TIMEFRAME || '—'));
-  const stale = d.last_bar_age_s != null && d.last_bar_age_s > 180;
-  set('bar', (s.last_bar || '—') + age(d.last_bar_age_s), stale && active ? 'warn' : '');
+  $('modes').textContent = ({paper: 'simulado, sem ordens reais', testnet: 'ambiente de teste da corretora', live: 'ATENÇÃO: conta real'})[cfg.QUANT_MODE] || '';
+  set('sym', (cfg.QUANT_SYMBOL || '—'));
+  $('syms').textContent = `timeframe ${cfg.QUANT_TIMEFRAME || '—'} · qty ${cfg.QUANT_QTY || '—'} · perda máx/dia ${cfg.QUANT_MAX_DAILY_LOSS || '—'}`;
+  const tfSec = ({'1m': 60, '5m': 300, '15m': 900, '1h': 3600}[cfg.QUANT_TIMEFRAME] || 60);
+  const stale = d.last_bar_age_s != null && d.last_bar_age_s > tfSec * 3;
+  set('bar', s.last_bar || '—', stale && active ? 'warn' : '');
+  $('bars').textContent = d.last_bar_age_s == null ? '' : 'há ' + dur(d.last_bar_age_s);
 
   const pos = ex.pos;
   set('pos', pos ? JSON.stringify(pos).replace(/[{}"]/g, '') : 'sem posição');
@@ -117,20 +181,32 @@ async function refresh() {
   set('pnl', `${fmt(pnl)} · ${risk.trades ?? 0}`, pnl > 0 ? 'ok' : pnl < 0 ? 'bad' : '');
   set('halt', risk.halted ? 'TRAVADO' + (risk.reason ? ': ' + risk.reason : '') : 'livre', risk.halted ? 'bad' : 'ok');
 
-  const b = $('banner');
-  if (d.kill_file) { b.textContent = 'KILL acionado: o runner está parado ou parando'; b.className = 'banner bad'; }
-  else if (!active) { b.textContent = 'runner não está ativo'; b.className = 'banner bad'; }
-  else if (risk.halted) { b.textContent = 'runner ativo, mas com a trava de risco ligada'; b.className = 'banner warn'; }
-  else if (stale) { b.textContent = 'runner ativo, mas sem barra nova há mais de 3 min'; b.className = 'banner warn'; }
-  else { b.textContent = 'runner ativo e dentro do normal'; b.className = 'banner ok'; }
+  const b = $('banner'); let txt, cls;
+  if (d.kill_file) { txt = 'KILL acionado: o runner está parado ou parando'; cls = 'bad'; }
+  else if (!active) { txt = 'runner não está ativo'; cls = 'bad'; }
+  else if (risk.halted) { txt = 'runner ativo, mas com a trava de risco ligada'; cls = 'warn'; }
+  else if (stale) { txt = `runner ativo, mas sem barra nova há ${dur(d.last_bar_age_s)}`; cls = 'warn'; }
+  else { txt = 'runner ativo e dentro do normal'; cls = 'ok'; }
+  b.textContent = txt; b.className = 'banner ' + cls;
+  document.title = ({ok: '[OK]', warn: '[atenção]', bad: '[parado]'}[cls]) + ' quant · controle';
 
   drawChart(d.bars, s.entry, s.stop);
+
+  const p = d.portfolio;
+  if (p) {
+    set('peq', p.equity == null ? '—' : fmt(p.equity, 4), p.equity > 1 ? 'ok' : p.equity < 1 ? 'bad' : '');
+    $('peqs').textContent = `${pct(p.equity - 1)} desde o início · ${p.days} dia(s) · até ${p.last_date}`;
+    set('ppnl', pct(p.pnl, 3), p.pnl > 0 ? 'ok' : p.pnl < 0 ? 'bad' : '');
+    drawEquity(p.series, p.weights);
+  } else { set('peq', 'sem dados'); $('peqs').textContent = ''; set('ppnl', '—'); drawEquity([], {}); }
+
+  lastLog = d.log || []; drawLog();
   $('kill').disabled = !!d.kill_file;
-  $('log').textContent = (d.log || []).join('\n') || '(sem linhas)';
 }
 
 $('kill').addEventListener('click', async () => {
-  if (!confirm('Acionar o kill-switch? A posição será fechada e o runner parará de vez.')) return;
+  const t = prompt('Isto fecha a posição e para o runner de vez.\nPara confirmar, digite KILL:');
+  if (t !== 'KILL') return;
   $('kill').disabled = true;
   try {
     const r = await fetch('api/kill', {method: 'POST', headers: {'X-Quant-Control': '1'}});
@@ -139,6 +215,7 @@ $('kill').addEventListener('click', async () => {
   refresh();
 });
 
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
 refresh();
 setInterval(refresh, 5000);
 </script>

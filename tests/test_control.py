@@ -88,3 +88,18 @@ def test_barras_recentes_falham_para_lista_vazia(monkeypatch):
     monkeypatch.setattr(control.urllib.request, "urlopen", boom)
     control._BARS_CACHE.update({"t": 0.0, "key": None, "data": []})
     assert control.recent_closes("ETH/USDT:USDT", "1m", now=1000.0) == []
+
+
+def test_resumo_do_paper_da_carteira(tmp_path):
+    log = tmp_path / "p.csv"
+    log.write_text("date,equity,pnl,funding,cost,turnover,gross,w_BTCUSDT,w_ETHUSDT\n"
+                   "2026-11-23,1.0,0.0,0,0,0,0.3,-0.07,-0.05\n2026-11-24,0.99,-0.01,nan,0,0,0.3,-0.07,0.02\n")
+    s = control.portfolio_summary(log)
+    assert s["days"] == 2 and s["equity"] == 0.99 and s["pnl"] == -0.01
+    assert s["weights"] == {"BTCUSDT": -0.07, "ETHUSDT": 0.02} and s["series"][0] == ["2026-11-23", 1.0]
+    assert control.portfolio_summary(tmp_path / "nao_existe.csv") is None
+
+
+def test_saude_sem_systemctl_nao_quebra(monkeypatch):
+    monkeypatch.setattr(control, "_run", lambda *a, **k: "")
+    assert control.service_health() == {"uptime_s": None, "restarts": None, "memory_mb": None}
