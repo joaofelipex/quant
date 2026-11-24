@@ -9,6 +9,7 @@ from quant.strategies import trend_follow as tf
 from .executor import BinanceFuturesExecutor, PaperExecutor
 from .feed import CcxtFeed, PublicSpotFeed
 from .kalshi import KalshiPerpsExecutor, load_private_key
+from .polymarket import PolymarketPerpsExecutor, load_credentials
 from .risk import RiskLimits, RiskManager
 from .runner import Runner
 
@@ -25,12 +26,21 @@ def build_kalshi(mode: str, env=os.environ.get) -> KalshiPerpsExecutor:
                                subaccount=int(sub) if sub else None)
 
 
+def build_polymarket(env=os.environ.get) -> PolymarketPerpsExecutor:
+    """Polymarket Perps nao tem testnet: so existe live (com a confirmacao explicita, checada pelo chamador)."""
+    path = env("POLYMARKET_CREDENTIALS_PATH", "")
+    if not path:
+        raise SystemExit("POLYMARKET_CREDENTIALS_PATH e obrigatorio com QUANT_VENUE=polymarket")
+    return PolymarketPerpsExecutor(env("POLYMARKET_SYMBOL", "ETH-USD"), load_credentials(path))
+
+
 def build_feed(mode: str, symbol: str, timeframe: str, kind: str, choice: str = "auto", venue: str = "binance"):
     """``auto``: o paper le o endpoint PUBLICO de spot (alcancavel de qualquer regiao, sem chave); testnet/live leem a
     exchange via ccxt (precos do mesmo ambiente em que as ordens vao). ``public``/``ccxt`` forcam a escolha."""
     if choice not in {"auto", "public", "ccxt"}:
         raise SystemExit(f"QUANT_FEED invalido: {choice!r} (auto | public | ccxt)")
-    if choice == "public" or (choice == "auto" and (mode == "paper" or venue == "kalshi")):  # Kalshi: barras publicas
+    public_venue = mode == "paper" or venue in ("kalshi", "polymarket")  # barras publicas da Binance, sem chave
+    if choice == "public" or (choice == "auto" and public_venue):
         return PublicSpotFeed(symbol, timeframe)
     return CcxtFeed(symbol, timeframe, testnet=(mode == "testnet"), testnet_kind=kind)
 
@@ -39,7 +49,7 @@ def build_runner() -> Runner:
     env = os.environ.get
     mode = env("QUANT_MODE", "paper")  # paper | testnet | live
     symbol, tfm = env("QUANT_SYMBOL", "ETH/USDT:USDT"), env("QUANT_TIMEFRAME", "5m")
-    venue = env("QUANT_VENUE", "binance")  # binance | kalshi (so afeta testnet/live; o paper nao fala com corretora)
+    venue = env("QUANT_VENUE", "binance")  # binance | kalshi | polymarket
     kind = env("QUANT_TESTNET_KIND", "testnet")  # testnet (sandbox legado) | demo (Demo Trading)
 
     if mode == "paper":
@@ -47,13 +57,17 @@ def build_runner() -> Runner:
     elif mode in ("testnet", "live"):
         if mode == "live" and env("QUANT_ALLOW_MAINNET") != "yes-i-know":
             raise SystemExit("modo live exige QUANT_ALLOW_MAINNET=yes-i-know (e uma estrategia aprovada pelo README)")
+        if venue == "polymarket" and mode != "live":
+            raise SystemExit("Polymarket Perps nao tem testnet: valide em paper e depois so em live (com confirmacao)")
         if venue == "kalshi":
             executor = build_kalshi(mode, env)
+        elif venue == "polymarket":
+            executor = build_polymarket(env)
         elif venue == "binance":
             executor = BinanceFuturesExecutor(symbol, env("BINANCE_API_KEY", ""), env("BINANCE_API_SECRET", ""),
                                               testnet=(mode == "testnet"), testnet_kind=kind)
         else:
-            raise SystemExit(f"QUANT_VENUE invalido: {venue!r} (binance | kalshi)")
+            raise SystemExit(f"QUANT_VENUE invalido: {venue!r} (binance | kalshi | polymarket)")
     else:
         raise SystemExit(f"QUANT_MODE invalido: {mode}")
 
