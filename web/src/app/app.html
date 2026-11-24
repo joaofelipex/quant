@@ -1,0 +1,19 @@
+<main>
+  <div class="top">
+    <h1>quant · controle</h1>
+    <span class="sub">
+      <span class="dot" [class.on]="store.connected()" [class.off]="!store.connected() && !store.loading()"></span>
+      @if (store.connected()) { ao vivo · {{ store.data()!.now * 1000 | date: 'HH:mm:ss' }} }
+      @else if (store.loading()) { conectando… }
+      @else { sem conexão }
+      · <a href="/">painel do paper</a>
+    </span>
+  </div>
+  <nav aria-label="seções">
+    @for (l of links; track l.to) {
+      <a [routerLink]="l.to" routerLinkActive="on" [routerLinkActiveOptions]="{ exact: l.exact }">{{ l.label }}</a>
+    }
+  </nav>
+  <div class="banner" [class]="store.banner().tone" role="status">{{ store.banner().text }}</div>
+  <router-outlet />
+</main>

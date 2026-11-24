@@ -1,0 +1,30 @@
+:root{--bg:#f6f7f9;--card:#fff;--ink:#14181f;--mute:#5d6674;--line:#e3e6ea;--accent:#1f6feb;--ok:#15803d;--bad:#b91c1c;--warn:#b45309}
+@media(prefers-color-scheme:dark){:root{--bg:#0e1116;--card:#161b22;--ink:#e6edf3;--mute:#8b949e;--line:#2b323c;--accent:#58a6ff;--ok:#4ade80;--bad:#f87171;--warn:#fbbf24}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+h1{font-size:21px;margin:0}
+h2{font-size:12px;margin:26px 0 8px;text-transform:uppercase;letter-spacing:.07em;color:var(--mute)}
+a{color:var(--accent)}
+.sub{color:var(--mute);font-size:13px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:11px 14px}
+.k{font-size:12px;color:var(--mute)}
+.v{font-size:19px;font-weight:600;font-variant-numeric:tabular-nums;word-break:break-word}
+.s{font-size:12px;color:var(--mute)}
+.ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}
+.banner{margin:14px 0 0;padding:10px 14px;border-radius:10px;border:1px solid var(--line);background:var(--card);font-weight:600}
+.banner.ok{border-color:var(--ok)}.banner.bad{border-color:var(--bad)}.banner.warn{border-color:var(--warn)}
+svg{display:block;width:100%;height:auto}
+pre{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;overflow:auto;max-height:420px;font-size:12px;line-height:1.5;margin:0;white-space:pre-wrap;word-break:break-word}
+button,select,input{font:inherit}
+button.act,button.kill,a.act{font-weight:600;padding:8px 16px;border-radius:8px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;text-decoration:none;display:inline-block}
+button.act:hover:not(:disabled),a.act:hover{background:var(--accent);color:#fff}
+button.kill{padding:10px 18px;border-color:var(--bad);color:var(--bad)}
+button.kill:hover:not(:disabled){background:var(--bad);color:#fff}
+button:disabled{opacity:.4;cursor:default}
+label.f{display:flex;flex-direction:column;gap:2px;font-size:12px;color:var(--mute)}
+input,select{background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:5px 8px;width:100%}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+.note{color:var(--mute);font-size:13px;margin-top:10px}
+.msg{font-size:13px;margin-top:8px;min-height:1.2em}
+.mt{margin-top:10px}

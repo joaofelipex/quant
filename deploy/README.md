@@ -169,8 +169,11 @@ sudo install -m 640 -o root -g quant /dev/null /etc/quant/alert.env && sudo nano
 
 O botão "Enviar alerta de teste" do painel confirma o canal. O painel nunca mostra o token (só o nome do canal).
 
+**Painel Angular:** o front mora em `web/` (ver `web/README.md`). O build vai no pacote como `web-dist/` e o backend o serve de
+`/opt/quant/web-dist` (`QUANT_WEB_DIR` na unit). Precisa de Node/npm só no seu computador, nunca na VM.
+
 **Atualizar o código pelo painel:** o painel **não recebe código pela web**. No seu computador, na raiz do repo:
-`deploy/enviar-pacote.sh CAMINHO_DA_CHAVE_SSH` (empacota o `HEAD` e põe em `/var/lib/quant/inbox/` por SSH). No painel,
+`deploy/enviar-pacote.sh CAMINHO_DA_CHAVE_SSH` (roda o build do Angular, empacota o `HEAD` + `web-dist/` e põe em `/var/lib/quant/inbox/` por SSH). No painel,
 "Atualizar código": a VM valida o pacote (sem caminhos suspeitos), roda a suite **numa cópia de staging**, faz backup
 (`/var/lib/quant/backups`, guarda 5), aplica e confere que importa; se algo falhar, restaura sozinha. Depois reinicie o
 runner para usar o código novo. "Reverter" volta ao último backup. O polkit libera só `start` dessas units e o restart do painel.

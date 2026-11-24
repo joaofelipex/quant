@@ -131,3 +131,10 @@ def test_scripts_da_fase_2_recusam_live_e_nao_imprimem_chaves():
     smoke = read("testnet-smoke.sh")
     assert "EnvironmentFile=" in smoke and "User=quant" in smoke  # chaves via systemd, nao pela linha de comando
 
+
+
+def test_painel_angular_e_empacotado_e_servido_do_web_dist():
+    assert "Environment=QUANT_WEB_DIR=/opt/quant/web-dist" in directives(read("quant-control.service"))
+    send = read("enviar-pacote.sh")
+    assert "npm run build" in send and "web-dist" in send and "git archive" in send
+    assert "web-dist" in read("atualizar.sh")

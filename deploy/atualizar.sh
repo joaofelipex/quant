@@ -40,6 +40,8 @@ resumo="$(echo "$out" | tail -1)"
 status rodando "backup e aplicacao"
 tar -czf "$BK/pre-$TS.tar.gz" -C "$APP" --exclude=.venv --exclude='__pycache__' . || fail "falha no backup"
 ls -1t "$BK"/pre-*.tar.gz | tail -n +6 | xargs -r rm -f   # guarda os 5 mais recentes
+# o painel Angular vem como web-dist/ (arquivos com hash no nome): troca a pasta inteira para nao acumular lixo
+grep -Eq '^(\./)?web-dist/' <<<"$lista" && rm -rf "$APP/web-dist"
 tar -xzf "$IN" -C "$APP" || { tar -xzf "$BK/pre-$TS.tar.gz" -C "$APP"; fail "falha ao extrair; backup restaurado"; }
 if ! (cd "$APP" && "$PY" -c "import quant.control, quant.live.config, quant.alerts, quant.selfcheck"); then
     tar -xzf "$BK/pre-$TS.tar.gz" -C "$APP"; fail "codigo novo nao importa; backup restaurado"

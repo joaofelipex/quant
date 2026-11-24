@@ -17,6 +17,7 @@ Environment=QUANT_DEPLOY_STATUS=/var/lib/quant/deploy.json
 Environment=QUANT_ALERT_ENV=/etc/quant/alert.env
 Environment=QUANT_ALERT_STATE=/var/lib/quant/alerts_state.json
 Environment=QUANT_CONTROL_PORT=8765
+Environment=QUANT_WEB_DIR=/opt/quant/web-dist
 ExecStart=/opt/quant/.venv/bin/python -m quant.control
 Restart=on-failure
 RestartSec=5

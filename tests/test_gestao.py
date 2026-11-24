@@ -214,13 +214,16 @@ class TestAtualizar:
     def status(self, tmp_path):
         return json.loads((tmp_path / "data" / "deploy.json").read_text())
 
-    def fake_project(self, tmp_path, *, passing=True, filler=0):
+    def fake_project(self, tmp_path, *, passing=True, filler=0, web=False):
         src = tmp_path / "pkg" / "src" / "quant"
         (src / "live").mkdir(parents=True)
         for mod in ("__init__", "control", "alerts", "selfcheck", "live/__init__", "live/config"):
             (src / f"{mod}.py").write_text("")
         for i in range(filler):  # listagem maior que o buffer do pipe (64 KB): pegaria o SIGPIPE do 'grep -q'
             (tmp_path / "pkg" / f"arquivo_de_enchimento_com_nome_longo_{i:05d}.txt").write_text("x")
+        if web:  # o painel Angular compilado viaja como web-dist/
+            (tmp_path / "pkg" / "web-dist").mkdir()
+            (tmp_path / "pkg" / "web-dist" / "main-NOVO1234.js").write_text("novo")
         body = "True" if passing else "False"
         (tmp_path / "pkg" / "test_x.py").write_text(f"def test_ok():\n    assert {body}\n")
         pkg = tmp_path / "data" / "inbox" / "quant.tar.gz"
@@ -250,6 +253,15 @@ class TestAtualizar:
         assert not (tmp_path / "data" / "inbox" / "quant.tar.gz").exists()  # consumido: nao reaplica sozinho
         r2 = self.run_script(tmp_path, "reverter.sh")
         assert r2.returncode == 0 and self.status(tmp_path)["state"] == "ok"
+
+    def test_web_dist_e_trocado_sem_acumular_arquivos_antigos(self, tmp_path):
+        self.fake_project(tmp_path, web=True)
+        old = tmp_path / "app" / "web-dist"
+        old.mkdir()
+        (old / "main-VELHO123.js").write_text("velho")
+        r = self.run_script(tmp_path)
+        assert r.returncode == 0, r.stdout + r.stderr
+        assert (old / "main-NOVO1234.js").exists() and not (old / "main-VELHO123.js").exists()
 
     def test_caminho_malicioso_e_recusado(self, tmp_path):
         (tmp_path / "x").mkdir()

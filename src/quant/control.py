@@ -14,11 +14,13 @@ import csv
 import json
 import math
 import os
+import re
 import subprocess
 import time
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import unquote
 
 SERVICE = "quant-live"
 ENV_WHITELIST = ("QUANT_MODE", "QUANT_VENUE", "QUANT_SYMBOL", "QUANT_TIMEFRAME", "QUANT_QTY", "QUANT_MAX_DAILY_LOSS",
@@ -93,7 +95,38 @@ def runner_action(verb: str, kill_file: Path, run=None) -> dict:
     run = run or (lambda cmd: subprocess.run(cmd, capture_output=True, text=True, timeout=30))
     r = run(["systemctl", verb, SERVICE])
     return {"ok": r.returncode == 0, "erro": (r.stderr or "").strip()[:300] if r.returncode else ""}
-PAGE = Path(__file__).with_name("control.html")
+# painel Angular (web/): `npm run build` gera web/dist/web/browser; na VM o pacote traz o build em /opt/quant/web-dist
+WEB_DIR_DEFAULT = Path(__file__).resolve().parents[2] / "web" / "dist" / "web" / "browser"
+MIME = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
+        ".json": "application/json; charset=utf-8", ".ico": "image/x-icon", ".svg": "image/svg+xml",
+        ".png": "image/png", ".txt": "text/plain; charset=utf-8", ".map": "application/json"}
+HASHED = re.compile(r"-[A-Za-z0-9_]{8}\.(js|css)$")  # arquivos com hash no nome podem ficar em cache para sempre
+CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+       "connect-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'")
+NO_BUILD = ("<!doctype html><meta charset=utf-8><title>quant</title><body style='font:15px system-ui;padding:2em'>"
+            "<h1>Painel Angular não encontrado</h1><p>Rode <code>npm ci &amp;&amp; npm run build</code> em "
+            "<code>web/</code> (ou envie o pacote com <code>deploy/enviar-pacote.sh</code>) e recarregue.</p>").encode()
+
+
+def web_dir() -> Path:
+    return Path(os.environ.get("QUANT_WEB_DIR", str(WEB_DIR_DEFAULT)))
+
+
+def resolve_static(root: Path, url_path: str) -> tuple[Path | None, bool]:
+    """(arquivo, e_rota_spa). Nunca sai de ``root``; sem extensao = rota do Angular, que cai no index.html."""
+    rel = unquote(url_path).lstrip("/")
+    if not rel:
+        rel = "index.html"
+    try:
+        target = (root / rel).resolve()
+        if root.resolve() not in target.parents and target != root.resolve():
+            return None, False  # tentativa de sair da pasta (../)
+    except (OSError, ValueError):
+        return None, False
+    if target.is_file():
+        return target, False
+    spa = "." not in Path(rel).name or rel == "index.html"  # sem build, '/' deve avisar (503) em vez de dar 404
+    return ((root / "index.html"), True) if spa else (None, False)
 
 
 def _run(cmd: list[str], timeout: float = 5) -> str:
@@ -298,11 +331,14 @@ def make_handler(state_path: Path, kill_file: Path, runtime_path: Path = RUNTIME
         server_version = "quant-control"
         sys_version = ""
 
-        def _send(self, code: int, body: bytes, ctype: str) -> None:
+        def _send(self, code: int, body: bytes, ctype: str, cache: str = "no-store") -> None:
             self.send_response(code)
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(body)))
-            self.send_header("Cache-Control", "no-store")
+            self.send_header("Cache-Control", cache)
+            if ctype.startswith("text/html"):
+                self.send_header("Content-Security-Policy", CSP)
+                self.send_header("Referrer-Policy", "no-referrer")
             self.send_header("X-Content-Type-Options", "nosniff")
             self.end_headers()
             self.wfile.write(body)
@@ -310,11 +346,23 @@ def make_handler(state_path: Path, kill_file: Path, runtime_path: Path = RUNTIME
         def _json(self, code: int, obj: dict) -> None:
             self._send(code, json.dumps(obj, default=str).encode(), "application/json; charset=utf-8")
 
+        def _static(self, path: str) -> None:
+            root = web_dir()
+            f, spa = resolve_static(root, path)
+            if f is None:
+                return self._json(404, {"erro": "nao encontrado"})
+            try:
+                body = f.read_bytes()
+            except OSError:
+                return self._send(503, NO_BUILD, "text/html; charset=utf-8")
+            cache = "public, max-age=31536000, immutable" if HASHED.search(f.name) else "no-store"
+            self._send(200, body, MIME.get(f.suffix.lower(), "application/octet-stream"), cache)
+
         def do_GET(self):  # noqa: N802
             path = self.path.split("?")[0]
-            if path in ("/", "/index.html"):
-                self._send(200, PAGE.read_bytes(), "text/html; charset=utf-8")
-            elif path == "/api/status":
+            if not path.startswith("/api/"):
+                return self._static(path)
+            if path == "/api/status":
                 self._json(200, build_status(state_path, kill_file))
             elif path == "/api/trades":
                 self._json(200, trades_summary(Path(os.environ.get("QUANT_TRADES_LOG", "trades.csv")), 500))

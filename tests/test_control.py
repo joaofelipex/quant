@@ -39,9 +39,10 @@ def test_status_devolve_estado_do_runner(server):
     assert d["kill_file"] is False and d["last_bar_age_s"] > 0
 
 
-def test_pagina_inicial_e_servida(server):
+def test_pagina_inicial_sem_build_avisa_em_vez_de_quebrar(server, monkeypatch, tmp_path):
+    monkeypatch.setenv("QUANT_WEB_DIR", str(tmp_path / "nao_existe"))
     code, body = call(server[0] + "/")
-    assert code == 200 and b"kill-switch" in body.lower()
+    assert code == 503 and b"npm" in body
 
 
 def test_kill_sem_cabecalho_e_recusado(server):
@@ -206,19 +207,44 @@ def test_polkit_so_libera_a_unit_do_runner_e_as_tres_acoes():
     assert "runtime.env" in ctl_unit and "QUANT_SELFCHECK=/var/lib/quant/selfcheck.json" in ctl_unit
 
 
-def test_script_da_pagina_tem_sintaxe_js_valida(tmp_path):
-    import re
-    import shutil
-    import subprocess
+def make_web(tmp_path):
+    web = tmp_path / "web"
+    web.mkdir()
+    (web / "index.html").write_text("<!doctype html><app-root></app-root>")
+    (web / "main-ABCD1234.js").write_text("console.log(1)")
+    (web / "styles.css").write_text("a{}")
+    (tmp_path / "segredo.txt").write_text("nao pode vazar")
+    return web
 
-    node = shutil.which("node")
-    if not node:
-        pytest.skip("node nao instalado")
-    html = Path(control.__file__).with_name("control.html").read_text(encoding="utf-8")
-    js = tmp_path / "pagina.js"
-    js.write_text(re.search(r"<script>(.*)</script>", html, re.S).group(1), encoding="utf-8")
-    r = subprocess.run([node, "--check", str(js)], capture_output=True, text=True)
-    assert r.returncode == 0, r.stderr
+
+def test_spa_serve_index_assets_e_rotas_do_angular(server, monkeypatch, tmp_path):
+    monkeypatch.setenv("QUANT_WEB_DIR", str(make_web(tmp_path)))
+    base = server[0]
+    for route in ("/", "/index.html", "/trades", "/gestao"):  # rotas do Angular caem no index.html
+        code, body = call(base + route)
+        assert code == 200 and b"app-root" in body, route
+    req = urllib.request.urlopen(base + "/main-ABCD1234.js")
+    assert req.headers["Content-Type"].startswith("text/javascript")
+    assert "immutable" in req.headers["Cache-Control"]  # arquivo com hash
+    assert urllib.request.urlopen(base + "/styles.css").headers["Cache-Control"] == "no-store"
+    index = urllib.request.urlopen(base + "/")
+    csp = index.headers["Content-Security-Policy"]
+    assert "script-src 'self'" in csp and "frame-ancestors 'none'" in csp
+    assert call(base + "/nao-existe.js")[0] == 404  # arquivo com extensao que nao existe nao vira index
+
+
+@pytest.mark.parametrize("evil", ["/../segredo.txt", "/%2e%2e/segredo.txt", "/..%2fsegredo.txt",
+                                  "/web/../../segredo.txt"])
+def test_servidor_estatico_nao_sai_da_pasta(server, monkeypatch, tmp_path, evil):
+    monkeypatch.setenv("QUANT_WEB_DIR", str(make_web(tmp_path)))
+    code, body = call(server[0] + evil)
+    assert b"nao pode vazar" not in body
+
+
+def test_api_nao_cai_no_fallback_da_spa(server, monkeypatch, tmp_path):
+    monkeypatch.setenv("QUANT_WEB_DIR", str(make_web(tmp_path)))
+    code, body = call(server[0] + "/api/inexistente")
+    assert code == 404 and b"app-root" not in body
 
 
 def test_selfcheck_aparece_no_status_e_pode_ser_disparado(ctl, tmp_path, monkeypatch):

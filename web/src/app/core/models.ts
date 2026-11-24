@@ -1,0 +1,73 @@
+/** Contratos da API do painel (quant/control.py). Campos opcionais refletem o que a VM pode não ter ainda. */
+
+export interface Position { side: number; qty: number; entry: number }
+
+export interface RunnerState {
+  last_bar: string | null;
+  stop: number | null;
+  stop_dist: number | null;
+  entry: { side: number; qty: number; price: number } | null;
+  risk: { day?: string; pnl?: number; trades?: number; halted?: boolean; reason?: string };
+  executor: { pos?: unknown; basis?: number } | null;
+}
+
+export interface Health { uptime_s: number | null; restarts: number | null; memory_mb: number | null }
+
+export interface PortfolioSummary {
+  days: number; last_date: string; equity: number | null; pnl: number | null;
+  series: [string, number | null][]; weights: Record<string, number | null>;
+}
+
+export interface SelfcheckReport {
+  at: string; ok: boolean;
+  tests: { ok: boolean; passed: number; failed: number; skipped: number; seconds: number; failures: string[] } | null;
+  checks: { name: string; ok: boolean; detail: string }[];
+  paper: { days: number; equity: number | null; ret_total: number | null; sharpe: number | null; max_dd: number;
+           verdict: string } | null;
+}
+
+export interface Trade {
+  ts: string; origem: string; side: number; qty: number; entrada: number; saida: number; pnl: number; motivo: string;
+}
+
+export interface TradesSummary {
+  count: number; pnl_total: number; wins: number; win_rate: number | null; max_dd: number;
+  trades: Trade[]; curve: [string, number][];
+}
+
+export interface VenueInfo { modos: string[]; credencial: string }
+
+export interface DeployStatus {
+  last: { state: 'rodando' | 'ok' | 'erro'; msg: string; at: string; id: string } | null;
+  pacote: { bytes: number; mtime: number } | null;
+}
+
+export interface AlertsStatus { canais: string[]; ultima_checagem: number | null; estado: unknown }
+
+export interface Status {
+  now: number;
+  bars: [number, number][];
+  service: string;
+  kill_file: boolean;
+  config: Record<string, string>;
+  health: Health;
+  selfcheck: SelfcheckReport | null;
+  deploy: DeployStatus;
+  alerts: AlertsStatus;
+  trades: TradesSummary;
+  venues: Record<string, VenueInfo>;
+  portfolio: PortfolioSummary | null;
+  state: RunnerState | null;
+  last_bar_age_s: number | null;
+  log: string[];
+}
+
+export interface SettingsResponse {
+  saved: Record<string, string>;
+  effective: Record<string, string>;
+  options: Record<string, string[]>;
+}
+
+export interface ActionResult { ok?: boolean; erro?: string; canais?: string[]; restart_needed?: boolean }
+
+export type Tone = '' | 'ok' | 'bad' | 'warn';
