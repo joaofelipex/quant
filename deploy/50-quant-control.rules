@@ -1,6 +1,6 @@
 // /etc/polkit-1/rules.d/50-quant-control.rules
 // Deixa o usuario `quant` (servico quant-control) ligar/parar/reiniciar SO a unit quant-live.service e disparar
-// (start) SO as units quant-selfcheck / quant-alert / quant-deploy / quant-rollback e reiniciar o proprio quant-control.
+// (start) SO as units quant-selfcheck / quant-alert / quant-deploy / quant-rollback / quant-order (boleta manual) e reiniciar o proprio quant-control.
 // Nao autoriza nenhuma outra unit nem enable/disable de arquivos de unit.
 polkit.addRule(function (action, subject) {
     if (subject.user !== "quant" || action.id !== "org.freedesktop.systemd1.manage-units") {
@@ -10,7 +10,8 @@ polkit.addRule(function (action, subject) {
     if (unit === "quant-live.service" && ["start", "stop", "restart"].indexOf(verb) !== -1) {
         return polkit.Result.YES;
     }
-    if (["quant-selfcheck.service", "quant-alert.service", "quant-deploy.service", "quant-rollback.service"]
+    if (["quant-selfcheck.service", "quant-alert.service", "quant-deploy.service", "quant-rollback.service",
+         "quant-order.service"]
             .indexOf(unit) !== -1 && verb === "start") {
         return polkit.Result.YES;
     }

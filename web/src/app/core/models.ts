@@ -70,4 +70,14 @@ export interface SettingsResponse {
 
 export interface ActionResult { ok?: boolean; erro?: string; canais?: string[]; restart_needed?: boolean }
 
+/** Posicao na corretora, vista pela boleta manual (quant/manual.py). */
+export interface OrderPosition {
+  side: number; qty: number; entry: number; stop: boolean | null; price: number | null; upnl: number | null;
+}
+/** Resposta de GET api/order: `pendente` ate a unit quant-order gravar o resultado do pedido `id`. */
+export interface OrderResult {
+  id?: string; ok?: boolean; msg?: string; aviso?: string; pendente?: boolean; position?: OrderPosition | null;
+}
+export interface OrderRequest { action: 'status' | 'open' | 'close' | 'stop'; side?: 1 | -1; qty?: number; stop_pct?: number | null }
+
 export type Tone = '' | 'ok' | 'bad' | 'warn';

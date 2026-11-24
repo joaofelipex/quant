@@ -16,6 +16,8 @@ Environment=QUANT_TRADES_LOG=/var/lib/quant/trades.csv
 Environment=QUANT_DEPLOY_STATUS=/var/lib/quant/deploy.json
 Environment=QUANT_ALERT_ENV=/etc/quant/alert.env
 Environment=QUANT_ALERT_STATE=/var/lib/quant/alerts_state.json
+Environment=QUANT_ORDER_REQUEST=/var/lib/quant/order-request.json
+Environment=QUANT_ORDER_RESULT=/var/lib/quant/order-result.json
 Environment=QUANT_CONTROL_PORT=8765
 Environment=QUANT_WEB_DIR=/opt/quant/web-dist
 ExecStart=/opt/quant/.venv/bin/python -m quant.control

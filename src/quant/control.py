@@ -5,8 +5,9 @@
 Escuta so em 127.0.0.1 (o nginx faz proxy em /controle/). Biblioteca padrao apenas. O que ele PODE fazer: ler o estado
 do runner e o journal, criar o arquivo KILL, ligar/parar/reiniciar o servico do runner (polkit restrito a essa unit) e
 gravar parametros VALIDADOS num arquivo proprio (``runtime.env``, sem segredos). O que NAO faz, de proposito:
-enviar ordem, aceitar modo ``live`` ou Polymarket (so por edicao na VM), apagar o KILL (retomar depois de kill e decisao
-humana, ver deploy/README.md), ler ou gravar chaves.
+enviar ordem por conta propria (a boleta manual so grava um pedido validado e dispara a unit ``quant-order``, que
+e quem tem a chave, e so na demo), aceitar modo ``live`` ou Polymarket (so por edicao na VM), apagar o KILL
+(retomar depois de kill e decisao humana, ver deploy/README.md), ler ou gravar chaves.
 """
 from __future__ import annotations
 
@@ -84,6 +85,44 @@ def write_runtime(path: Path, updates: dict) -> dict[str, str]:
     tmp.write_text("# gerado por quant.control; sem segredos" + chr(10) + body)
     tmp.replace(path)
     return merged
+
+
+ORDER_REQUEST = Path("/var/lib/quant/order-request.json")
+ORDER_RESULT = Path("/var/lib/quant/order-result.json")
+ORDER_UNIT = "quant-order.service"
+
+
+def submit_order(body: object, req_path: Path, res_path: Path, run=None) -> tuple[int, dict]:
+    """Valida o pedido da boleta manual, grava-o e dispara ``quant-order``. Nao fala com a corretora nem le chaves.
+    ``open``/``stop`` exigem o runner parado (dois donos da mesma posicao); ``close`` e ``status`` sempre passam."""
+    from .manual import OrderError, validate
+
+    run = run or (lambda cmd: subprocess.run(cmd, capture_output=True, text=True, timeout=30))
+    try:
+        req = validate(body)
+    except OrderError as e:
+        return 400, {"ok": False, "erro": str(e)}
+    if req["action"] in ("open", "stop") and run(["systemctl", "is-active", SERVICE]).stdout.strip() == "active":
+        return 409, {"ok": False,
+                     "erro": "pare o runner antes de operar a mao (Operar > Parar): ele e o outro dono da posicao"}
+    if run(["systemctl", "is-active", ORDER_UNIT]).stdout.strip() in ("active", "activating"):
+        return 409, {"ok": False, "erro": "ja ha uma ordem em andamento; aguarde"}
+    req["id"] = f"{int(time.time() * 1000)}"
+    tmp = req_path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(req))
+    tmp.replace(req_path)
+    res_path.unlink(missing_ok=True)
+    r = run(["systemctl", "start", "--no-block", ORDER_UNIT])
+    if r.returncode:
+        return 409, {"ok": False, "erro": (r.stderr or "").strip()[:300] or "nao consegui disparar a ordem"}
+    return 202, {"ok": True, "id": req["id"]}
+
+
+def read_order(res_path: Path) -> dict:
+    try:
+        return json.loads(res_path.read_text())
+    except (OSError, ValueError):
+        return {"pendente": True}
 
 
 def runner_action(verb: str, kill_file: Path, run=None) -> dict:
@@ -372,6 +411,8 @@ def make_handler(state_path: Path, kill_file: Path, runtime_path: Path = RUNTIME
                 except OSError:
                     body = b""
                 self._send(200, body, "text/csv; charset=utf-8")
+            elif path == "/api/order":
+                self._json(200, read_order(Path(os.environ.get("QUANT_ORDER_RESULT", str(ORDER_RESULT)))))
             elif path == "/api/settings":
                 self._json(200, {"saved": read_runtime(runtime_path), "effective": runner_config(),
                                  "options": {"QUANT_MODE": ["paper", "testnet"], "QUANT_VENUE": ["binance", "kalshi"],
@@ -403,6 +444,15 @@ def make_handler(state_path: Path, kill_file: Path, runtime_path: Path = RUNTIME
                 sent = alerts.deliver(cfg, "Alerta de teste enviado pelo painel de controle.")
                 return self._json(200 if sent else 502, {"ok": bool(sent), "canais": sent,
                                                          "erro": "" if sent else "falha ao entregar (veja o journal)"})
+            if path == "/api/order":
+                try:
+                    n = int(self.headers.get("Content-Length") or 0)
+                    body = json.loads(self.rfile.read(min(n, 2048)) or b"{}")
+                except ValueError:
+                    return self._json(400, {"ok": False, "erro": "corpo JSON invalido"})
+                code, res = submit_order(body, Path(os.environ.get("QUANT_ORDER_REQUEST", str(ORDER_REQUEST))),
+                                         Path(os.environ.get("QUANT_ORDER_RESULT", str(ORDER_RESULT))), run)
+                return self._json(code, res)
             if path.startswith("/api/runner/"):
                 try:
                     res = runner_action(path.rsplit("/", 1)[1], kill_file, run)

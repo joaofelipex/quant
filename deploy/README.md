@@ -147,7 +147,7 @@ Instalação (uma vez, e de novo se as units mudarem):
 
 ```bash
 sudo cp deploy/quant-alert.service deploy/quant-alert.timer deploy/quant-deploy.service deploy/quant-rollback.service \
-        deploy/quant-live.service deploy/quant-control.service /etc/systemd/system/
+        deploy/quant-live.service deploy/quant-control.service deploy/quant-order.service /etc/systemd/system/
 sudo install -m 0644 deploy/50-quant-control.rules /etc/polkit-1/rules.d/
 sudo systemctl daemon-reload && sudo systemctl enable --now quant-alert.timer && sudo systemctl restart quant-control
 ```
@@ -155,6 +155,11 @@ sudo systemctl daemon-reload && sudo systemctl enable --now quant-alert.timer &&
 **Histórico de trades:** o runner grava cada trade fechado em `/var/lib/quant/trades.csv` (corretora/modo, lado, preços,
 PnL, motivo). O painel mostra curva, acerto, pior queda e os últimos trades, e o CSV baixa em `/controle/api/trades.csv`.
 O PnL de saída por stop da corretora é uma estimativa (o runner não vê o preço real do fill do gatilho).
+
+**Boleta manual (Boleta):** comprar, vender, colocar stop e fechar a mão pelo painel, só na Kalshi **demo**. O painel não tem
+chave: ele grava um pedido validado e dispara `quant-order.service` (que tem a chave e recusa tudo que não seja `kalshi` +
+`testnet`). Abrir/proteger exige o runner parado; fechar e consultar sempre funcionam. Teto de 0,05 por ordem; o KILL bloqueia
+novas aberturas. Cada fechamento entra no histórico como `manual`.
 
 **Alertas (Telegram e/ou e-mail):** o `quant-alert.timer` roda a cada minuto e só avisa quando algo MUDA (runner ligou/parou/falhou,
 trava de risco, kill-switch, autoverificação, trade novo). O segredo fica num arquivo que **você** grava na VM:

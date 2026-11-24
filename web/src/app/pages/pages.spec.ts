@@ -11,6 +11,7 @@ import { ManagePage } from './manage.page';
 import { OperatePage } from './operate.page';
 import { OverviewPage } from './overview.page';
 import { PortfolioPage } from './portfolio.page';
+import { TicketPage } from './ticket.page';
 import { TradesPage } from './trades.page';
 
 const STATUS: Status = {
@@ -76,8 +77,26 @@ describe('paginas renderizam sem erro (pega inject() fora de contexto, templates
     expect(t).toContain('Kill-switch');
     expect(t).toContain('kalshi');
   });
+  it('boleta: com o runner ligado avisa e bloqueia abrir', () => {
+    const el = render(TicketPage);
+    expect(el.textContent).toContain('O runner está ligado');
+    const buy = [...el.querySelectorAll('button')].find(b => b.textContent!.includes('Comprar'))!;
+    expect(buy.disabled).toBe(true);
+  });
+  it('boleta: runner parado nao mostra o aviso e consulta a posicao', () => {
+    const el = render(TicketPage, { ...STATUS, service: 'inactive' });
+    const btns = [...el.querySelectorAll('button')].filter(b => /Comprar|Vender/.test(b.textContent!));
+    expect(btns.length).toBe(2);
+    expect(el.textContent).not.toContain('O runner está ligado');
+    expect(el.textContent).toContain('Enviando');  // a consulta inicial da posicao esta em andamento
+  });
+  it('boleta: fora da demo da Kalshi fica indisponivel', () => {
+    const el = render(TicketPage, { ...STATUS, config: { ...STATUS.config, QUANT_VENUE: 'binance' } });
+    expect(el.textContent).toContain('indisponível');
+    expect(el.textContent).not.toContain('Comprar');
+  });
   it('sem dados ainda: nao quebra', () => {
-    for (const p of [OverviewPage, TradesPage, PortfolioPage, HealthPage, ManagePage]) {
+    for (const p of [OverviewPage, TradesPage, PortfolioPage, HealthPage, ManagePage, TicketPage]) {
       TestBed.resetTestingModule();
       expect(() => render(p, null)).not.toThrow();
     }

@@ -1,0 +1,27 @@
+[Unit]
+Description=quant boleta manual (ordem a mao na Kalshi DEMO, pedida pelo painel)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=quant
+WorkingDirectory=/opt/quant
+# tem a chave da corretora (o painel web nao tem); o codigo recusa qualquer coisa que nao seja kalshi + testnet
+EnvironmentFile=/etc/quant-live.env
+EnvironmentFile=-/var/lib/quant/runtime.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=QUANT_STATE=/var/lib/quant/live_state.json
+Environment=QUANT_KILL_FILE=/var/lib/quant/KILL
+Environment=QUANT_TRADES_LOG=/var/lib/quant/trades.csv
+Environment=QUANT_ORDER_REQUEST=/var/lib/quant/order-request.json
+Environment=QUANT_ORDER_RESULT=/var/lib/quant/order-result.json
+ExecStart=/opt/quant/.venv/bin/python -m quant.manual
+TimeoutStartSec=90
+# codigo 1 = ordem recusada (o motivo vai no resultado); nao e falha da unit
+SuccessExitStatus=1
+StateDirectory=quant
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/quant
