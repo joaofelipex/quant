@@ -2,6 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal, Type } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { describe, expect, it } from 'vitest';
 import { Status } from '../core/models';
 import { StatusStore } from '../core/status.store';
@@ -34,8 +35,8 @@ const STATUS: Status = {
 
 function render(page: Type<unknown>, status: Status | null = STATUS): HTMLElement {
   TestBed.configureTestingModule({
-    providers: [provideHttpClient(), provideHttpClientTesting(),
-                { provide: StatusStore, useValue: { data: signal(status), refresh: () => {} } }],
+    providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([]),
+                { provide: StatusStore, useValue: { data: signal(status), banner: signal({ text: 'runner ativo e dentro do normal', tone: 'ok' }), refresh: () => {} } }],
   });
   const f = TestBed.createComponent(page);
   f.detectChanges();
@@ -45,13 +46,15 @@ function render(page: Type<unknown>, status: Status | null = STATUS): HTMLElemen
 describe('paginas renderizam sem erro (pega inject() fora de contexto, templates quebrados)', () => {
   it('visao geral', () => {
     const t = render(OverviewPage).textContent!;
-    expect(t).toContain('testnet · kalshi');
-    expect(t).toContain('entrada 1.699,00');
+    expect(t).toContain('testnet');
+    expect(t).toContain('kalshi');
+    expect(t).toContain('LONG');
   });
   it('trades', () => {
     const t = render(TradesPage).textContent!;
     expect(t).toContain('0,0500');
     expect(t).toContain('Baixar CSV');
+    expect(t).toContain('LONG');
   });
   it('carteira', () => {
     const t = render(PortfolioPage).textContent!;

@@ -2,6 +2,10 @@ export interface ChartLine { value: number; color: string; label: string }
 
 export interface ChartModel {
   points: string;
+  area: string;
+  xs: number[];
+  ys: number[];
+  values: number[];
   lines: { y: number; color: string; label: string; value: number }[];
   baseline: number | null;
   lo: number;
@@ -24,8 +28,12 @@ export function buildChart(values: number[], height: number, opts: { lines?: Cha
   const top = 10, h = height - 20;
   const y = (val: number) => top + h - ((val - (lo - pad)) * h) / (hi - lo + 2 * pad);
   const x = (i: number) => PAD_X + (i * (CHART_W - 2 * PAD_X)) / (v.length - 1);
+  const xs = v.map((_, i) => x(i)), ys = v.map(val => y(val));
+  const pts = xs.map((px, i) => `${px.toFixed(1)},${ys[i].toFixed(1)}`);
   return {
-    points: v.map((val, i) => `${x(i).toFixed(1)},${y(val).toFixed(1)}`).join(' '),
+    points: pts.join(' '),
+    area: `M${pts[0]} L${pts.slice(1).join(' L')} L${xs[xs.length - 1].toFixed(1)},${height} L${xs[0].toFixed(1)},${height} Z`,
+    xs, ys, values: v,
     lines: (opts.lines ?? []).map(l => ({ ...l, y: y(l.value) })),
     baseline: opts.baseline != null ? y(opts.baseline) : null,
     lo, hi, x,

@@ -1,74 +1,82 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 import { ApiService } from '../core/api.service';
-import { Msg, NO_MSG, runAction } from '../core/action';
-import { filterLog, fmt, logTone, LogFilter, pct } from '../core/format';
+import { runAction } from '../core/action';
+import { filterLog, fmt, logTone, LogFilter, pct, tone } from '../core/format';
 import { StatusStore } from '../core/status.store';
-import { StatCard } from '../shared/stat-card';
+import { Icon } from '../shared/icon';
+import { Kpi } from '../shared/kpi';
+import { PageHead } from '../shared/page-head';
+import { ToastService } from '../shared/toast';
 
 @Component({
   selector: 'app-health',
-  imports: [StatCard, FormsModule],
+  imports: [Kpi, PageHead, Icon],
   styles: `
-    .l{display:block}
-    .bad{color:var(--bad)}.warn{color:var(--warn)}
-    .chk{font-size:12px}`,
+    .seg{display:inline-flex;border:1px solid var(--line-strong);border-radius:10px;overflow:hidden}
+    .seg button{font:inherit;font-size:13px;font-weight:600;padding:6px 13px;border:none;background:transparent;color:var(--mute);cursor:pointer}
+    .seg button.on{background:var(--accent-soft);color:var(--accent)}
+    .chk{display:flex;align-items:center;gap:10px}
+    .chk app-icon{flex:none}`,
   template: `
-    <h2>Testes automáticos da VM</h2>
+    <app-page-head title="Saúde" subtitle="Testes automáticos da VM, serviços e log do runner">
+      <button class="btn" [disabled]="busy()" (click)="run()"><app-icon name="refresh" [size]="16" /> Rodar agora</button>
+    </app-page-head>
+
     @if (sc(); as sc) {
-      <div class="grid">
-        <app-stat label="última verificação" [value]="sc.ok ? 'tudo certo' : 'FALHOU'" [tone]="sc.ok ? 'ok' : 'bad'"
-                  [sub]="when(sc.at)" />
+      <div class="grid cols-3">
+        <app-kpi label="última verificação" [value]="sc.ok ? 'tudo certo' : 'FALHOU'" [tone]="sc.ok ? 'ok' : 'bad'" [sub]="when(sc.at)" />
         @if (sc.tests; as t) {
-          <app-stat label="suite pytest" [value]="t.passed + ' ok · ' + t.failed + ' falhas'" [tone]="t.ok ? 'ok' : 'bad'"
-                    [sub]="t.seconds + ' s' + (t.failures.length ? ' · ' + t.failures.join(', ') : '')" />
+          <app-kpi label="suite pytest" [value]="t.passed + ' ok'" [tone]="t.ok ? 'ok' : 'bad'"
+                   [sub]="t.failed + ' falhas · ' + t.skipped + ' ignorados · ' + t.seconds + ' s' + (t.failures.length ? ' · ' + t.failures.join(', ') : '')" />
         }
         @if (sc.paper; as p) {
-          <app-stat label="paper da carteira" [value]="p.sharpe == null ? 'sem Sharpe' : 'Sharpe ' + fmt(p.sharpe)"
-                    [tone]="(p.sharpe ?? 0) > 0 ? 'ok' : ''"
-                    [sub]="p.days + ' dia(s) · ret ' + pct(p.ret_total) + ' · DD ' + pct(p.max_dd) + ' · ' + p.verdict" />
+          <app-kpi label="paper da carteira" [value]="p.sharpe == null ? 'sem Sharpe' : 'Sharpe ' + fmt(p.sharpe)" [tone]="tone(p.sharpe)"
+                   [sub]="p.days + ' dia(s) · ret ' + pct(p.ret_total) + ' · ' + p.verdict" />
         }
       </div>
-      <div class="card mt">
-        @for (c of sc.checks; track c.name) {
-          <div class="chk"><span [class]="c.ok ? 'ok' : 'bad'">{{ c.ok ? '✔' : '✘' }} {{ c.name }}</span> <span class="s">{{ c.detail }}</span></div>
-        }
-      </div>
+      <section class="card mt">
+        <div class="card-h"><h2>Checagens dos serviços</h2></div>
+        <div class="list">
+          @for (c of sc.checks; track c.name) {
+            <div class="chk"><app-icon [name]="c.ok ? 'check' : 'alert'" [size]="17" [class]="c.ok ? 'ok' : 'bad'" /><span>{{ c.name }}</span><span class="sub" style="margin-left:auto">{{ c.detail }}</span></div>
+          }
+        </div>
+      </section>
     } @else {
-      <div class="card s">sem relatório; aguardando a primeira execução</div>
+      <div class="card"><div class="empty"><b>Sem relatório ainda</b>A primeira verificação roda sozinha; ou clique em "Rodar agora".</div></div>
     }
-    <div class="row mt">
-      <button class="act" (click)="run()">Rodar agora</button>
-      <span class="sub" [class]="msg().tone">{{ msg().text }}</span>
-    </div>
-    <p class="note">Roda sozinha a cada 6 h: pytest, saúde dos serviços e avaliação do paper. Só lê e testa; não altera serviços nem usa chaves.
+    <p class="note mt">Roda sozinha a cada 6 h: pytest, saúde dos serviços e avaliação do paper. Só lê e testa; não altera serviços nem usa chaves.
       O veredito do paper só vale depois de ~12 meses (regra do repo).</p>
 
-    <h2>Log do runner</h2>
-    <div class="row">
-      <label class="sub">mostrar
-        <select [ngModel]="filter()" (ngModelChange)="filter.set($event)">
-          <option value="all">tudo</option>
-          <option value="key">ordens, avisos e erros</option>
-          <option value="err">só avisos e erros</option>
-        </select>
-      </label>
-    </div>
-    <pre>@for (l of lines(); track $index) {<span class="l" [class]="logTone(l)">{{ l }}</span>} @empty {(sem linhas para este filtro)}</pre>`,
+    <section class="card mt">
+      <div class="card-h">
+        <h2>Log do runner</h2>
+        <div class="seg" role="group" aria-label="filtro do log">
+          <button [class.on]="filter() === 'all'" (click)="filter.set('all')">tudo</button>
+          <button [class.on]="filter() === 'key'" (click)="filter.set('key')">ordens e avisos</button>
+          <button [class.on]="filter() === 'err'" (click)="filter.set('err')">só erros</button>
+        </div>
+      </div>
+      <pre class="log">@for (l of lines(); track $index) {<span class="l" [class]="logTone(l)">{{ l }}</span>} @empty {(sem linhas para este filtro)}</pre>
+    </section>`,
 })
 export class HealthPage {
   private readonly store = inject(StatusStore);
   private readonly api = inject(ApiService);
+  private readonly toast = inject(ToastService);
   protected readonly sc = computed(() => this.store.data()?.selfcheck ?? null);
   protected readonly filter = signal<LogFilter>('all');
   protected readonly lines = computed(() => filterLog(this.store.data()?.log ?? [], this.filter()));
-  protected readonly msg = signal<Msg>(NO_MSG);
+  protected readonly busy = signal(false);
   protected readonly fmt = fmt;
   protected readonly pct = pct;
+  protected readonly tone = tone;
   protected readonly logTone = logTone;
   protected when = (iso: string) => new Date(iso).toLocaleString('pt-BR');
 
   protected run(): void {
-    runAction(this.msg, this.api.runSelfcheck(), () => 'em execução; atualiza em ~1 min', () => this.store.refresh());
+    this.busy.set(true);
+    runAction(this.toast, this.api.runSelfcheck(), () => 'Verificação em execução; o resultado aparece em ~1 min',
+              () => { this.busy.set(false); this.store.refresh(); });
   }
 }

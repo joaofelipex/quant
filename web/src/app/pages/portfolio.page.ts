@@ -1,55 +1,64 @@
 import { Component, computed, inject } from '@angular/core';
 import { fmt, pct, tone } from '../core/format';
 import { StatusStore } from '../core/status.store';
+import { Kpi } from '../shared/kpi';
 import { LineChart } from '../shared/line-chart';
-import { StatCard } from '../shared/stat-card';
+import { PageHead } from '../shared/page-head';
 
 @Component({
   selector: 'app-portfolio',
-  imports: [StatCard, LineChart],
+  imports: [Kpi, LineChart, PageHead],
   styles: `
-    .w{display:grid;grid-template-columns:78px 1fr 70px;gap:8px;align-items:center;font-size:13px;padding:2px 0}
-    .track{position:relative;height:10px;background:var(--line);border-radius:4px}
-    .mid{position:absolute;left:50%;top:-2px;width:1px;height:14px;background:var(--mute)}
-    .bar{position:absolute;top:0;height:100%;border-radius:4px}
-    .r{text-align:right}`,
+    .w{display:grid;grid-template-columns:64px 1fr 64px;gap:12px;align-items:center;font-size:13.5px;padding:5px 0}
+    .track{position:relative;height:10px;background:var(--surface-2);border:1px solid var(--line);border-radius:6px}
+    .mid{position:absolute;left:50%;top:-3px;width:1px;height:14px;background:var(--faint)}
+    .bar{position:absolute;top:0;height:100%;border-radius:5px}`,
   template: `
-    <h2>Carteira tsmom_cripto (paper)</h2>
+    <app-page-head title="Carteira" subtitle="tsmom_cripto em paper (dados reais, sem ordens): equity e pesos do último dia" />
     @if (p(); as p) {
-      <div class="grid">
-        <app-stat label="equity (base 1,00)" [value]="fmt(p.equity, 4)" [tone]="tone(p.equity, 1)"
-                  [sub]="pct((p.equity ?? 1) - 1) + ' desde o início · ' + p.days + ' dia(s) · até ' + p.last_date" />
-        <app-stat label="PnL do último dia" [value]="pct(p.pnl, 3)" [tone]="tone(p.pnl)" />
+      <div class="grid cols-3">
+        <app-kpi label="equity (base 1,00)" [value]="fmt(p.equity, 4)" [tone]="tone(p.equity, 1)"
+                 [sub]="pct((p.equity ?? 1) - 1) + ' desde o início'" />
+        <app-kpi label="PnL do último dia" [value]="pct(p.pnl, 3)" [tone]="tone(p.pnl)" [sub]="'até ' + p.last_date" />
+        <app-kpi label="dias de paper" [value]="'' + p.days" sub="o veredito só vale após ~12 meses" />
       </div>
-      <div class="card mt">
-        <app-line-chart [values]="series()" [height]="150" [baseline]="1" label="equity do paper" empty="a curva aparece com 2 dias ou mais" />
+      <section class="card mt">
+        <div class="card-h"><h2>Curva de equity</h2></div>
+        <app-line-chart [values]="series()" [labels]="dates()" [height]="200" [baseline]="1" [format]="eq" label="equity do paper"
+                        empty="a curva aparece quando houver 2 dias ou mais" />
+      </section>
+      <section class="card mt">
+        <div class="card-h"><div><h2>Pesos do último dia</h2><div class="sub">verde = comprado, vermelho = vendido</div></div></div>
         @for (w of weights(); track w.name) {
           <div class="w">
-            <span>{{ w.name }}</span>
+            <b>{{ w.name }}</b>
             <div class="track">
               <div class="mid"></div>
               <div class="bar" [style.width.%]="w.width" [style.left.%]="w.value >= 0 ? 50 : 50 - w.width"
                    [style.background]="w.value >= 0 ? 'var(--ok)' : 'var(--bad)'"></div>
             </div>
-            <span class="r">{{ pct(w.value, 1) }}</span>
+            <span class="num r">{{ pct(w.value, 1) }}</span>
           </div>
         }
-      </div>
-      <p class="note">Paper com dados reais. O veredito só vale depois de ~12 meses (regra do repo); a estratégia foi reprovada no estudo e roda só para acumular evidência.</p>
+      </section>
+      <p class="note mt">Esta estratégia foi <b>reprovada</b> no estudo (README do repo) e roda só para acumular evidência em tempo real.</p>
     } @else {
-      <div class="card s">sem dados do paper ainda</div>
+      <div class="card"><div class="empty"><b>Sem dados do paper ainda</b>O timer diário grava o primeiro dia à meia-noite UTC.</div></div>
     }`,
 })
 export class PortfolioPage {
   private readonly store = inject(StatusStore);
   protected readonly p = computed(() => this.store.data()?.portfolio ?? null);
-  protected readonly series = computed(() => (this.p()?.series ?? []).map(s => s[1]).filter((x): x is number => x != null));
+  private readonly pts = computed(() => (this.p()?.series ?? []).filter((s): s is [string, number] => s[1] != null));
+  protected readonly series = computed(() => this.pts().map(s => s[1]));
+  protected readonly dates = computed(() => this.pts().map(s => s[0]));
   protected readonly weights = computed(() => {
     const w = this.p()?.weights ?? {};
     const names = Object.keys(w);
     const mx = Math.max(0.0001, ...names.map(n => Math.abs(w[n] ?? 0)));
     return names.map(n => ({ name: n.replace('USDT', ''), value: w[n] ?? 0, width: Math.abs(w[n] ?? 0) / mx * 50 }));
   });
+  protected readonly eq = (v: number) => fmt(v, 4);
   protected readonly fmt = fmt;
   protected readonly pct = pct;
   protected readonly tone = tone;

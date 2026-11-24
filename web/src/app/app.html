@@ -1,19 +1,47 @@
-<main>
-  <div class="top">
-    <h1>quant · controle</h1>
-    <span class="sub">
-      <span class="dot" [class.on]="store.connected()" [class.off]="!store.connected() && !store.loading()"></span>
-      @if (store.connected()) { ao vivo · {{ store.data()!.now * 1000 | date: 'HH:mm:ss' }} }
-      @else if (store.loading()) { conectando… }
-      @else { sem conexão }
-      · <a href="/">painel do paper</a>
-    </span>
-  </div>
-  <nav aria-label="seções">
-    @for (l of links; track l.to) {
-      <a [routerLink]="l.to" routerLinkActive="on" [routerLinkActiveOptions]="{ exact: l.exact }">{{ l.label }}</a>
+<div class="shell">
+  <aside class="side">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">q</span>
+      <div><b>quant</b><span class="sub">painel de controle</span></div>
+    </div>
+    <nav aria-label="seções">
+      @for (l of links; track l.to) {
+        <a [routerLink]="l.to" routerLinkActive="on" [routerLinkActiveOptions]="{ exact: l.exact }">
+          <app-icon [name]="l.icon" [size]="19" />
+          <span class="full">{{ l.label }}</span><span class="short">{{ l.short }}</span>
+        </a>
+      }
+    </nav>
+    <div class="foot">
+      <a class="btn ghost sm" href="/"><app-icon name="external" [size]="15" /> painel do paper</a>
+      <button class="btn ghost sm" (click)="theme.toggle()" [attr.aria-label]="'tema ' + (theme.theme() === 'dark' ? 'claro' : 'escuro')">
+        <app-icon [name]="theme.theme() === 'dark' ? 'sun' : 'moon'" [size]="15" /> {{ theme.theme() === 'dark' ? 'tema claro' : 'tema escuro' }}
+      </button>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      @if (store.connected()) {
+        <span class="pill ok"><span class="dot pulse"></span>ao vivo · {{ store.data()!.now * 1000 | date: 'HH:mm:ss' }}</span>
+      } @else if (store.loading()) {
+        <span class="pill">conectando…</span>
+      } @else {
+        <span class="pill bad"><span class="dot"></span>sem conexão</span>
+      }
+      <button class="btn ghost sm mobile-theme" (click)="theme.toggle()" aria-label="alternar tema">
+        <app-icon [name]="theme.theme() === 'dark' ? 'sun' : 'moon'" [size]="16" />
+      </button>
+    </div>
+
+    @if (store.banner().tone === 'bad' || store.banner().tone === 'warn') {
+      <div class="alert" [class]="store.banner().tone" role="alert">
+        <app-icon name="alert" [size]="18" /> <span>{{ store.banner().text }}</span>
+      </div>
     }
-  </nav>
-  <div class="banner" [class]="store.banner().tone" role="status">{{ store.banner().text }}</div>
-  <router-outlet />
-</main>
+
+    <router-outlet />
+  </div>
+</div>
+<app-toasts />
+<app-confirm />
