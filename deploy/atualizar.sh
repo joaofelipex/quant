@@ -24,7 +24,7 @@ fail() { status erro "$1"; echo "ERRO: $1" >&2; exit 1; }
 status rodando "validando o pacote"
 tar -tzf "$IN" >/dev/null 2>&1 || fail "pacote corrompido"
 if tar -tzf "$IN" | grep -Eq '(^/|(^|/)\.\.(/|$))'; then fail "pacote com caminho absoluto ou '..' (recusado)"; fi
-tar -tzf "$IN" | grep -q '^src/quant/__init__.py$' || fail "pacote sem src/quant (nao parece o projeto)"
+tar -tzf "$IN" | sed 's#^\./##' | grep -q '^src/quant/__init__.py$' || fail "pacote sem src/quant (nao parece o projeto)"
 
 rm -rf "$STG"; mkdir -p "$STG"; tar -xzf "$IN" -C "$STG"
 PYTHONPATH="$STG/src" "$PY" -c "import quant,sys; assert quant.__file__.startswith(sys.argv[1]), quant.__file__" "$STG" \
