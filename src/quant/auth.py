@@ -1,8 +1,8 @@
 """Contas do painel: usuarios com papeis, sessoes no servidor, 2FA (TOTP), primeiro acesso e auditoria. So stdlib.
 
 Tudo mora em ``QUANT_AUTH_DIR`` (padrao /var/lib/quant, arquivos 0600): ``users.json`` (hash PBKDF2 das senhas, nunca o
-texto), ``sessions.json`` (so o SHA-256 do cookie: roubar o arquivo nao da acesso), ``audit.log`` (uma linha JSON por
-evento) e ``setup-token`` (existe so enquanto nao ha nenhum usuario: quem le o arquivo na VM cria o primeiro admin).
+texto), ``sessions.json`` (so o SHA-256 do cookie: roubar o arquivo nao da acesso) e ``audit.log`` (uma linha JSON por
+evento). O primeiro visitante cria o admin; depois a rota fecha.
 
 Papeis: ``leitor`` (so ve), ``operador`` (liga/para o runner, boleta, kill-switch, parametros) e ``admin`` (tudo, mais
 atualizar/reverter codigo e gerir usuarios). Recuperacao se perder o acesso, na VM:
@@ -185,37 +185,13 @@ class Auth:
     def needs_setup(self) -> bool:
         return not self._users()
 
-    def ensure_setup_token(self) -> str | None:
-        """Cria (se preciso) o token do primeiro acesso. None quando ja ha usuarios."""
-        with self.lock:
-            if not self.needs_setup:
-                (self.dir / "setup-token").unlink(missing_ok=True)
-                return None
-            path = self.dir / "setup-token"
-            try:
-                tok = path.read_text().strip()
-                if tok:
-                    return tok
-            except OSError:
-                pass
-            self.dir.mkdir(parents=True, exist_ok=True)
-            tok = secrets.token_urlsafe(18)
-            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-            with os.fdopen(fd, "w") as f:
-                f.write(tok + "\n")
-            return tok
-
-    def setup(self, token: str, user: str, password: str, ip: str) -> dict:
+    def setup(self, user: str, password: str, ip: str) -> dict:
+        """Primeiro acesso: cria o admin quando ainda nao ha nenhum usuario. Depois disso a rota se fecha (409)."""
         with self.lock:
             self._guard(ip)
-            want = self.ensure_setup_token()
-            if want is None:
+            if not self.needs_setup:
                 raise AuthError("o primeiro acesso ja foi feito", 409)
-            if not hmac.compare_digest(str(token).strip().encode(), want.encode()):
-                self._fail(ip)
-                raise AuthError("token de primeiro acesso incorreto", 403)
             u = self._create(check_username(user), password, "admin")
-            (self.dir / "setup-token").unlink(missing_ok=True)
             self.audit("primeiro-acesso", u["user"], ip, "admin criado")
             return u
 

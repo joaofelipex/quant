@@ -31,14 +31,14 @@ describe('telas de conta', () => {
     const t = setup(LoginPage, null).textContent!;
     expect(t).toContain('Entrar');
     expect(t).toContain('manter conectado');
-    expect(t).not.toContain('Token de primeiro acesso');
+    expect(t).not.toContain('Repita a senha');
   });
 
-  it('primeiro acesso pede o token e a confirmacao da senha', () => {
+  it('primeiro acesso pede so usuario e senha repetida', () => {
     const t = setup(LoginPage, null, true).textContent!;
-    expect(t).toContain('Token de primeiro acesso');
+    expect(t).toContain('Crie a conta de administrador');
     expect(t).toContain('Repita a senha');
-    expect(t).toContain('sudo cat /var/lib/quant/setup-token');
+    expect(t).not.toContain('Token');
   });
 
   it('conta: senha, 2FA e sessoes, com atalho de admin', () => {

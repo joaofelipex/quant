@@ -61,7 +61,7 @@ def _handle(auth, method, path, sess, body, ip, agent, cookie_header):  # noqa: 
         return None
 
     if path == "/api/setup":
-        u = auth.setup(_s(body, "token"), _s(body, "user", 60), _s(body, "password"), ip)
+        u = auth.setup(_s(body, "user", 60), _s(body, "password"), ip)
         token, ttl, _ = auth.login(u["user"], _s(body, "password"), ip, agent=agent)
         return 200, {"ok": True, "user": auth.public(u)}, ("set", token, ttl)
     if path == "/api/login":

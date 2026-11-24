@@ -29,8 +29,7 @@ def clock():
 @pytest.fixture
 def auth(tmp_path, clock):
     a = Auth(tmp_path / "d", now=lambda: clock["t"])
-    tok = a.ensure_setup_token()
-    a.setup(tok, "chefe", SENHA, "1.1.1.1")
+    a.setup("chefe", SENHA, "1.1.1.1")
     return a
 
 
@@ -66,31 +65,31 @@ class TestSenha:
 
 
 class TestPrimeiroAcesso:
-    def test_sem_usuarios_precisa_de_setup_e_gera_token_privado(self, tmp_path):
-        a = Auth(tmp_path / "d")
-        assert a.needs_setup
-        tok = a.ensure_setup_token()
-        assert tok and a.ensure_setup_token() == tok  # estavel entre chamadas
-        assert (tmp_path / "d" / "setup-token").read_text().strip() == tok
+    def test_sem_usuarios_precisa_de_setup(self, tmp_path):
+        assert Auth(tmp_path / "d").needs_setup
 
-    def test_token_errado_e_recusado_e_conta_como_tentativa(self, tmp_path):
+    def test_setup_cria_admin_e_fecha_a_rota(self, tmp_path):
         a = Auth(tmp_path / "d")
-        a.ensure_setup_token()
-        for _ in range(5):
+        a.setup("chefe", SENHA, "1.1.1.1")
+        assert not a.needs_setup and a.list_users()[0]["role"] == "admin"
+        with pytest.raises(AuthError) as e:  # o segundo visitante nao vira admin
+            a.setup("intruso", SENHA, "1.1.1.1")
+        assert e.value.status == 409 and len(a.list_users()) == 1
+
+    def test_setup_valida_usuario_e_senha(self, tmp_path):
+        a = Auth(tmp_path / "d")
+        for u, p in (("a b", SENHA), ("chefe", "curta")):
             with pytest.raises(AuthError):
-                a.setup("chute", "chefe", SENHA, "9.9.9.9")
-        with pytest.raises(AuthError) as e:
-            a.setup(a.ensure_setup_token(), "chefe", SENHA, "9.9.9.9")
-        assert e.value.status == 429 and a.needs_setup
+                a.setup(u, p, "1.1.1.1")
+        assert a.needs_setup
 
-    def test_setup_cria_admin_e_apaga_o_token(self, tmp_path):
+    def test_setup_tem_freio_por_ip(self, tmp_path):
         a = Auth(tmp_path / "d")
-        a.setup(a.ensure_setup_token(), "chefe", SENHA, "1.1.1.1")
-        assert not a.needs_setup and not (tmp_path / "d" / "setup-token").exists()
-        assert a.list_users()[0]["role"] == "admin"
-        with pytest.raises(AuthError) as e:  # nao da para refazer
-            a.setup("qualquer", "intruso", SENHA, "1.1.1.1")
-        assert e.value.status == 409
+        for _ in range(5):
+            a._fail("9.9.9.9")
+        with pytest.raises(AuthError) as e:
+            a.setup("chefe", SENHA, "9.9.9.9")
+        assert e.value.status == 429 and a.needs_setup
 
     def test_login_sem_usuarios(self, tmp_path):
         with pytest.raises(AuthError) as e:
@@ -423,19 +422,18 @@ class TestHttp:
         assert call(server + "/api/users", cook=oper)[0] == 403
         assert call(server + "/api/audit", cook=oper)[0] == 403
 
-    def test_primeiro_acesso_pelo_navegador(self, tmp_path, monkeypatch):
+    def test_primeiro_acesso_pelo_navegador(self, tmp_path):
         a = Auth(tmp_path / "novo")
-        tok = a.ensure_setup_token()
         handler = control.make_handler(tmp_path / "s.json", tmp_path / "K", tmp_path / "r.env", auth=a)
         srv = ThreadingHTTPServer(("127.0.0.1", 0), handler)
         threading.Thread(target=srv.serve_forever, daemon=True).start()
         base = f"http://127.0.0.1:{srv.server_address[1]}"
         try:
             assert call(base + "/api/session")[1] == {"user": None, "setup": True}
-            assert call(base + "/api/setup", "POST", {"token": "errado", "user": "chefe", "password": SENHA})[0] == 403
-            code, body, hdr = call(base + "/api/setup", "POST", {"token": tok, "user": "chefe", "password": SENHA})
+            assert call(base + "/api/status")[0] == 401  # sem usuarios nada abre
+            code, body, hdr = call(base + "/api/setup", "POST", {"user": "chefe", "password": SENHA})
             assert code == 200 and body["user"]["role"] == "admin" and "quant_session=" in hdr["Set-Cookie"]
-            assert call(base + "/api/setup", "POST", {"token": tok, "user": "x", "password": SENHA})[0] == 409
+            assert call(base + "/api/setup", "POST", {"user": "x", "password": SENHA})[0] == 409
         finally:
             srv.shutdown()
 

@@ -48,11 +48,11 @@ describe('AuthService', () => {
     http.expectOne('api/session').flush({ user: ME(), setup: false });  // confirma a sessao completa
   });
 
-  it('primeiro acesso manda o token e desliga o modo setup', () => {
+  it('primeiro acesso manda usuario e senha e desliga o modo setup', () => {
     auth.setup.set(true);
-    auth.firstAccess('tok', 'chefe', 'senha-longa-123').subscribe();
+    auth.firstAccess('chefe', 'senha-longa-123').subscribe();
     const req = http.expectOne('api/setup');
-    expect(req.request.body).toEqual({ token: 'tok', user: 'chefe', password: 'senha-longa-123' });
+    expect(req.request.body).toEqual({ user: 'chefe', password: 'senha-longa-123' });
     req.flush({ user: ME() });
     expect(auth.setup()).toBe(false);
     http.expectOne('api/session').flush({ user: ME(), setup: false });

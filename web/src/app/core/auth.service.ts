@@ -35,8 +35,8 @@ export class AuthService {
     return this.http.post<{ user: Me }>('api/login', f, { headers: CONTROL_HEADERS }).pipe(tap(r => this.enter(r.user)));
   }
 
-  firstAccess(token: string, user: string, password: string): Observable<{ user: Me }> {
-    return this.http.post<{ user: Me }>('api/setup', { token, user, password }, { headers: CONTROL_HEADERS }).pipe(
+  firstAccess(user: string, password: string): Observable<{ user: Me }> {
+    return this.http.post<{ user: Me }>('api/setup', { user, password }, { headers: CONTROL_HEADERS }).pipe(
       tap(r => { this.setup.set(false); this.enter(r.user); }));
   }
 

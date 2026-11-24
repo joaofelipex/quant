@@ -558,9 +558,8 @@ def main() -> None:
     from .auth import Auth
 
     auth = None if os.environ.get("QUANT_AUTH_DISABLED") == "1" else Auth.from_env()
-    if auth is not None and auth.ensure_setup_token():
-        print("PRIMEIRO ACESSO: nenhum usuario ainda. Leia o token na VM:  sudo cat /var/lib/quant/setup-token  "
-              "e abra o painel para criar o admin.", flush=True)
+    if auth is not None and auth.needs_setup:
+        print("PRIMEIRO ACESSO: nenhum usuario ainda; o primeiro a abrir o painel cria o admin.", flush=True)
     srv = ThreadingHTTPServer(("127.0.0.1", port), make_handler(state, kill, runtime, auth=auth))
     print(f"quant.control em 127.0.0.1:{port} (estado={state}, kill={kill}, login={'off' if auth is None else 'on'})",
           flush=True)

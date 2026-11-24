@@ -158,9 +158,8 @@ O PnL de saída por stop da corretora é uma estimativa (o runner não vê o pre
 
 **Contas e login do painel:** `/controle/` tem tela de login própria, com usuários, papéis e auditoria:
 
-- **Primeiro acesso:** sem nenhum usuário, o painel mostra a tela "primeiro acesso". Você prova que é o dono da VM com o token
-  (`sudo cat /var/lib/quant/setup-token`, aparece também no journal do `quant-control`) e cria o admin pelo navegador. Depois disso o
-  token é apagado e a rota fecha.
+- **Primeiro acesso:** sem nenhum usuário, o painel mostra a tela "primeiro acesso" e o primeiro a abrir cria o admin (sem token);
+  depois a rota fecha. Faça isso **antes** de expor o painel sem o basic auth do nginx.
 - **Papéis:** `leitor` só vê; `operador` liga/para o runner, usa a Boleta, o kill-switch e os parâmetros; `admin` também
   atualiza/reverte o código e gere usuários. O servidor confere o papel em cada rota (401 sem sessão, 403 sem papel).
 - **Segurança:** senhas com PBKDF2 (nunca em texto); cookie de sessão `HttpOnly`/`Secure`/`SameSite=Strict`, sorteado e guardado
