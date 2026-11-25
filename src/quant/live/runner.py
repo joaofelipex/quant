@@ -135,14 +135,35 @@ class Runner:
     def _close(self, price: float, ts: pd.Timestamp, why: str) -> None:
         pos = self.executor.position()
         fill = self.executor.close_position(price)
+        fills = [fill] if fill is not None else []
+        for _ in range(3):  # fill parcial (livro raso): repete o que sobrou; so conta como fechada se nao restar nada
+            rest = self.executor.position() if fills else None
+            if rest is None:
+                break
+            log.warning("fechamento parcial: restam %.6g; tentando de novo", rest.qty)
+            time.sleep(1.0)
+            try:
+                more = self.executor.close_position(price)
+            except Exception:  # noqa: BLE001 - segue para o tratamento de sobra abaixo
+                log.exception("nova tentativa de fechar falhou")
+                break
+            if more is not None:
+                fills.append(more)
+        rest = self.executor.position() if fills else None
+        if pos is not None and fills:
+            pnl = sum((f.price - pos.entry) * pos.side * f.qty - f.fee for f in fills)  # taxa de entrada nao rastreada
+            qty = sum(f.qty for f in fills)
+            self.risk.record_trade(pnl, ts)
+            self._record_trade(ts, pos.side, qty, pos.entry, fills[-1].price, pnl, why)
+            log.info("saida (%s) @ %.4f pnl=%.2f", why, fills[-1].price, pnl)
+        if rest is not None:  # sobrou posicao: NAO apaga o estado nem os stops; trava entradas ate alguem olhar
+            log.error("posicao nao fechou por inteiro (restam %.6g); mantendo stop e travando entradas", rest.qty)
+            if self.entry is not None:
+                self.entry = {**self.entry, "qty": rest.qty}
+            self.risk.halt("fechamento parcial")
+            return
         self._cancel_stops()  # depois de fechar: um stop velho nao pode sobrar para a proxima posicao
         self.stop = self.stop_dist = self.entry = self.ext = None
-        if pos is None or fill is None:
-            return
-        pnl = (fill.price - pos.entry) * pos.side * pos.qty - fill.fee  # taxa de entrada nao rastreada: aproximacao
-        self.risk.record_trade(pnl, ts)
-        self._record_trade(ts, pos.side, pos.qty, pos.entry, fill.price, pnl, why)
-        log.info("saida (%s) @ %.4f pnl=%.2f", why, fill.price, pnl)
 
     def _protect(self, side: int, qty: float, ts: pd.Timestamp) -> bool:
         """Coloca o stop protetor na corretora. Se nao der, fecha a posicao e trava: nunca ficar sem protecao."""

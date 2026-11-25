@@ -1,6 +1,7 @@
 """Varios ativos: registro, MultiRunner, tamanho por valor, status por ativo, configuracao e ordem manual por ativo."""
 import json
 import logging
+import types
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -764,3 +765,43 @@ class TestTrailingEVolatilidade:
     def test_tamanho_escala_com_o_peso(self):
         r, _ = self.runner(notional=10.0)
         assert r._size(100.0, 0.5) == pytest.approx(0.05)
+
+
+class TestFechamentoParcial:
+    """O livro raso fecha so parte da posicao: o runner nao pode dar a posicao por encerrada."""
+
+    def runner(self, parcelas):
+        ex = PaperExecutor()
+        fills = list(parcelas)
+        real = ex.close_position
+
+        def close_position(price):
+            if not fills:
+                return real(price)
+            q = fills.pop(0)
+            pos = ex.position()
+            if q >= pos.qty:
+                return real(price)
+            ex._pos = type(pos)(side=pos.side, qty=pos.qty - q, entry=pos.entry) if hasattr(ex, "_pos") else pos
+            return types.SimpleNamespace(qty=q, price=price, fee=0.0)
+        ex.close_position = close_position
+        r = Runner(type("F", (), {"closed_bars": lambda s, n: None})(), ex,
+                   RiskManager(RiskLimits(max_qty=1e9, max_daily_loss=1e9)), lambda b: b, qty=4.0, timeframe="1m",
+                   state_path="/nao/grava.json")
+        r._save = lambda: None
+        ex.market_order(-1, 4.0, 100.0)
+        r.entry, r.stop, r.stop_dist, r.ext = {"side": -1, "qty": 4.0, "price": 100.0}, 104.0, 4.0, 100.0
+        return r, ex
+
+    def test_parcial_repete_ate_fechar_e_so_entao_limpa(self, monkeypatch):
+        monkeypatch.setattr("quant.live.runner.time.sleep", lambda s: None)
+        r, ex = self.runner([1.0, 1.0])  # 1 + 1 parciais, a terceira tentativa fecha o resto
+        r._close(104.0, pd.Timestamp("2026-01-01"), "stop")
+        assert ex.position() is None and r.stop is None and r.entry is None
+
+    def test_sobra_depois_das_tentativas_mantem_estado_e_trava(self, monkeypatch):
+        monkeypatch.setattr("quant.live.runner.time.sleep", lambda s: None)
+        r, ex = self.runner([0.5, 0.5, 0.5, 0.5])
+        r._close(104.0, pd.Timestamp("2026-01-01"), "stop")
+        assert ex.position() is not None and r.stop == 104.0 and r.entry["qty"] == pytest.approx(ex.position().qty)
+        assert r.risk.halted
