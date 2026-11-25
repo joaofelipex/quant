@@ -80,6 +80,7 @@ def _error_code(text: str) -> str | None:
 
 
 class KalshiPerpsExecutor(Executor):
+    MAX_BOOK_DEV = 0.03      # livro mais longe que isso do preco justo (mark) e ignorado: oferta perdida/stale
     SLIPPAGE = 0.01          # teto de preco do limite IOC em relacao ao melhor preco do livro (1%)
     SETTLE_TRIES = 6         # espera a posicao refletir o fill (a Kalshi demora um instante a atualizar /positions)
     SETTLE_DELAY_S = 0.5
@@ -170,6 +171,13 @@ class KalshiPerpsExecutor(Executor):
             raise KalshiError(f"mercado {self.ticker} nao esta ativo (status={m.get('status')})")
         bid, ask = m.get("bid"), m.get("ask")
         ref = float(ask if side == 1 else bid or 0) or float(m["price"])
+        mark = float(m["price"])
+        if mark > 0 and abs(ref / mark - 1) > self.MAX_BOOK_DEV:
+            # a demo tem ofertas soltas longe do preco (um short foi fechado a 20.000 com o mercado em 2.762): nunca cruza
+            # o livro ate la; limita em volta do preco justo e, sem liquidez ali, a ordem simplesmente nao enche
+            log.warning("%s: livro (%.4f) a mais de %.0f%% do preco justo (%.4f); usando o preco justo como referencia",
+                        self.ticker, ref, self.MAX_BOOK_DEV * 100, mark)
+            ref = mark
         if self.rebase and not reduce_only and price_hint > 0:
             self.basis = (float(m["price"]) / self.unit) / price_hint
         # limite IOC cruzando o livro, com teto de 1% de slippage; compra arredonda para cima, venda para baixo

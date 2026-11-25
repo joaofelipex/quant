@@ -68,6 +68,8 @@ class KalshiFeed(Feed):
 
     HOSTS = {"demo": "https://external-api.demo.kalshi.co", "prod": "https://api.elections.kalshi.com"}
     CHUNK = 300  # velas por chamada
+    MAX_RANGE = 0.08  # vela com maxima/minima > 8% numa so barra de 1 min e dado ruim (a demo tem picos falsos)
+    MAX_JUMP = 0.08   # fechamento a mais de 8% da mediana das ultimas velas tambem
     MINUTES = {"1m": 1, "5m": 5, "15m": 15, "1h": 60}
 
     def __init__(self, ticker: str, timeframe: str = "1m", env: str = "demo", *, now=None, fetch=get_json):
@@ -97,6 +99,16 @@ class KalshiFeed(Feed):
                 return None
         return float(p["open"]), float(p["high"]), float(p["low"]), float(p["close"])
 
+    def _drop_spikes(self, df: pd.DataFrame, factor: float = 1.0) -> pd.DataFrame:
+        """Tira velas com pico falso (a demo da Kalshi tem): amplitude absurda ou fechamento longe da mediana vizinha.
+        Um pico nao pode virar stop falso nem entrada falsa; a vela some e o ATR/estrategia seguem com as outras."""
+        if len(df) < 3:
+            return df
+        wide = (df["high"] / df["low"].where(df["low"] > 0) - 1) > self.MAX_RANGE * factor
+        med = df["close"].rolling(5, center=True, min_periods=3).median()
+        far = (df["close"] / med - 1).abs() > self.MAX_JUMP * factor
+        return df[~(wide | far).fillna(False)].reset_index(drop=True)
+
     def closed_bars(self, n: int) -> pd.DataFrame:
         now = int(self.now())
         native = self.minutes in (1, 60)
@@ -121,6 +133,9 @@ class KalshiFeed(Feed):
             return pd.DataFrame({"datetime": pd.to_datetime([]), "open": [], "high": [], "low": [], "close": []})
         df = pd.DataFrame([(t, *v) for t, v in sorted(self.rows.items())],
                           columns=["ts", "open", "high", "low", "close"])
+        df = self._drop_spikes(df, 1.0 if period == 1 else 2.5)  # velas de 1 h oscilam mais que as de 1 min
+        if df.empty:
+            return pd.DataFrame({"datetime": pd.to_datetime([]), "open": [], "high": [], "low": [], "close": []})
         if not native:
             bucket = self.minutes * 60
             df["b"] = df["ts"] // bucket * bucket

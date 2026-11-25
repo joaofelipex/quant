@@ -436,3 +436,58 @@ class TestSemMargem:
         assert "entrada pulada" in caplog.text and r.entry is None and r.stop is None
         assert r.last_bar == bars.iloc[-1]["datetime"]  # barra processada: nao repete a cada 5 s
         assert r.step() == "sem_barra_nova"
+
+
+class TestDadosRuins:
+    """Picos falsos da demo: vela com amplitude absurda some; livro longe do preco justo nao vira fill."""
+
+    def test_feed_descarta_pico_falso_e_mantem_as_velas_boas(self):
+        from quant.live.feed import KalshiFeed
+
+        f = KalshiFeed.__new__(KalshiFeed)
+        f.MAX_RANGE = KalshiFeed.MAX_RANGE
+        f.MAX_JUMP = KalshiFeed.MAX_JUMP
+        close = [100.0, 100.1, 100.2, 100.1, 160.0, 100.3, 100.2, 100.4]  # um pico de +60% no meio
+        df = pd.DataFrame({"ts": range(len(close)), "open": close, "high": [c * 1.001 for c in close],
+                           "low": [c * 0.999 for c in close], "close": close})
+        limpo = f._drop_spikes(df)
+        assert 160.0 not in set(limpo["close"]) and len(limpo) == len(close) - 1
+        calmo = pd.DataFrame({"ts": range(7), "open": 100.0, "high": 100.1, "low": 99.9,
+                              "close": [100.0, 100.1, 100.2, 100.1, 100.3, 100.2, 100.4]})
+        calmo.loc[2, "high"] = 130.0  # amplitude de 30% numa vela de 1 min, com o fechamento normal
+        assert len(f._drop_spikes(calmo)) == 6
+        assert len(f._drop_spikes(df.iloc[:2])) == 2  # poucos dados: nao mexe
+
+    def test_ordem_ignora_oferta_solta_longe_do_preco_justo(self):
+        from quant.live.kalshi import KalshiPerpsExecutor
+
+        ex = KalshiPerpsExecutor.__new__(KalshiPerpsExecutor)
+        ex.ticker, ex.unit, ex.tick, ex.whole, ex.min_qty = "KXALUMINUMPERP1", 0.001, 0.0001, True, 1.0
+        ex.market_version, ex.subaccount, ex.basis, ex.rebase = 1, None, 1.0, False
+        # mercado em 2.76, mas um ask perdido em 20.0 (o caso real: short fechado a 20.000 por unidade)
+        ex._market = lambda: {"status": "active", "bid": "2.75", "ask": "20.0", "price": "2.76"}
+        enviadas = []
+
+        def req(method, path, **k):
+            if method == "POST":
+                enviadas.append(k["body"])
+                return {"fill_count": "0"}
+            return {"positions": []}
+
+        ex._req = req
+        with pytest.raises(Exception, match="sem fill"):  # nao enche porque nao ha liquidez perto do preco justo
+            ex.market_order(1, 0.004, 2762.0)
+        assert float(enviadas[0]["price"]) < 2.76 * 1.02  # o limite foi montado em volta de 2.76, nunca de 20
+
+    def test_livro_normal_continua_usando_o_livro(self):
+        from quant.live.kalshi import KalshiPerpsExecutor
+
+        ex = KalshiPerpsExecutor.__new__(KalshiPerpsExecutor)
+        ex.ticker, ex.unit, ex.tick, ex.whole, ex.min_qty = "KXETHPERP1", 0.001, 0.0001, True, 1.0
+        ex.market_version, ex.subaccount, ex.basis, ex.rebase = 1, None, 1.0, False
+        ex._market = lambda: {"status": "active", "bid": "1.67", "ask": "1.68", "price": "1.675"}
+        enviadas = []
+        ex._req = lambda m, p, **k: enviadas.append(k.get("body")) or {"fill_count": "0"}
+        with pytest.raises(Exception, match="sem fill"):
+            ex.market_order(1, 0.002, 1675.0)
+        assert float(enviadas[0]["price"]) == pytest.approx(1.68 * 1.01, abs=0.0002)
