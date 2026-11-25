@@ -184,6 +184,14 @@ dia chega nele; o kill-switch fecha todos em ~1 s. Tamanho por valor: `QUANT_NOT
 inteiros de cada ativo; ativos cujo menor contrato passa de 1,5 x esse valor ficam de fora (com aviso no log). A Visão geral mostra a
 tabela de ativos (com filtro); a Boleta pede ativo + valor em USD. Sem `QUANT_ASSETS` tudo funciona como antes (um ativo, `QUANT_QTY`).
 
+**Pesquisa de vantagem (o que realmente se sabe):** `scripts/pesquisa_tendencia.py` baixa 2 anos de barras de 1 h de 19 cripto da Binance, escolhe a
+configuração da estratégia de tendência **só pelo 1º ano** e mede no 2º (que foi de queda: comprar e segurar deu −42%), com custo de 10 bps por
+ida e volta. Resultado (2026-11-25): filtro **ER ≥ 0,5**, canal de **55** barras, stop **2×ATR**, **comprado e vendido**: +43% no treino e +38% no teste
+(Sharpe 1,45; t = 2,2; IC95% de 17 a 173 bps por trade; 13 de 19 moedas lucrativas; ainda positivo com custo de 40 bps). **Só comprado** deu +11% no
+teste mas **não é estatisticamente distinguível de zero** (t = 0,74) e 78% do lucro veio de 2 moedas. Com ER 0,3 não há vantagem. A vantagem é
+**modesta (dezenas de % ao ano, quedas de ~20%) e vale para barras de 1 h**: em 1 minuto o custo come tudo. Dobrar o capital exigiria alavancagem que
+também dobra o risco. Em Operar há o botão **Aplicar receita**, que só preenche o formulário (1 h, ER 0,5, canal 55, stop 2, long e short, 19 cripto).
+
 **Agente de IA (aba IA):** um agente (Claude, via API da Anthropic) que decide e opera sozinho **só na Kalshi demo**. A cada ciclo
 (padrão 10 min) ele recebe só números do sistema (livro de ofertas do universo, retornos e volatilidade dos candidatos, posições, PnL do dia,
 limites), responde pela ferramenta `decide` e o **código** valida cada ação antes de executar: valor máximo por entrada, posições abertas,

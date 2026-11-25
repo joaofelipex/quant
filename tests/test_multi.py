@@ -648,3 +648,34 @@ class TestDestravarRisco:
         from quant import accounts
 
         assert accounts.required_role("POST", "/api/risk/reset") == "admin"
+
+
+class TestParametrosDaEstrategia:
+    """Canal e filtro ER vem do ambiente (receita validada: ER 0,5, canal 55); padrao antigo preservado."""
+
+    def bars(self, n=300):
+        import numpy as np
+
+        rng = np.random.default_rng(3)
+        close = 100 + np.cumsum(rng.normal(0.05, 0.4, n))
+        return pd.DataFrame({"datetime": pd.date_range("2026-01-01", periods=n, freq="1h"), "open": close,
+                             "high": close + 0.3, "low": close - 0.3, "close": close})
+
+    def test_padrao_antigo_e_canal_55_dao_sinais_diferentes(self):
+        antigo = config.make_signals({}.get)(self.bars())
+        novo = config.make_signals({"QUANT_DONCHIAN": "55", "QUANT_ER": "0.5"}.get)(self.bars())
+        assert (antigo["signal"] != 0).sum() > (novo["signal"] != 0).sum()  # canal maior = menos rompimentos
+        assert "atr" in novo.columns
+
+    def test_er_mais_alto_filtra_mais(self):
+        frouxo = config.make_signals({"QUANT_ER": "0.1"}.get)(self.bars())
+        rigido = config.make_signals({"QUANT_ER": "0.9"}.get)(self.bars())
+        assert (frouxo["signal"] != 0).sum() >= (rigido["signal"] != 0).sum()
+
+    def test_configuracoes_validadas_no_painel(self, tmp_path):
+        p = tmp_path / "rt.env"
+        saved = control.write_runtime(p, {"QUANT_DONCHIAN": "55", "QUANT_ER": "0.5", "QUANT_TIMEFRAME": "1h"})
+        assert saved["QUANT_DONCHIAN"] == "55" and saved["QUANT_ER"] == "0.5"
+        for bad in ({"QUANT_DONCHIAN": "1"}, {"QUANT_DONCHIAN": "x"}, {"QUANT_ER": "1.5"}, {"QUANT_ER": "0"}):
+            with pytest.raises(control.SettingError):
+                control.write_runtime(p, bad)

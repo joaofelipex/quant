@@ -12,12 +12,13 @@ import { PageHead } from '../shared/page-head';
 import { ToastService } from '../shared/toast';
 
 export const SETTING_KEYS = ['QUANT_MODE', 'QUANT_VENUE', 'QUANT_TIMEFRAME', 'QUANT_QTY', 'QUANT_MAX_DAILY_LOSS',
-                             'QUANT_STOP_ATR', 'QUANT_ASSETS', 'QUANT_NOTIONAL', 'QUANT_MAX_TOTAL_LOSS', 'QUANT_DIRECTION'] as const;
+                             'QUANT_STOP_ATR', 'QUANT_ASSETS', 'QUANT_NOTIONAL', 'QUANT_MAX_TOTAL_LOSS', 'QUANT_DIRECTION', 'QUANT_DONCHIAN',
+                             'QUANT_ER'] as const;
 type Key = (typeof SETTING_KEYS)[number];
 
 const LABEL: Record<Key, string> = {
   QUANT_MODE: 'modo', QUANT_VENUE: 'corretora', QUANT_TIMEFRAME: 'timeframe', QUANT_QTY: 'quantidade',
-  QUANT_MAX_DAILY_LOSS: 'perda máxima/dia', QUANT_STOP_ATR: 'stop (× ATR)', QUANT_ASSETS: 'ativos', QUANT_DIRECTION: 'direção',
+  QUANT_MAX_DAILY_LOSS: 'perda máxima/dia', QUANT_STOP_ATR: 'stop (× ATR)', QUANT_ASSETS: 'ativos', QUANT_DIRECTION: 'direção', QUANT_DONCHIAN: 'canal (barras)', QUANT_ER: 'filtro ER',
   QUANT_NOTIONAL: 'valor por entrada (USD)', QUANT_MAX_TOTAL_LOSS: 'perda máxima total/dia',
 };
 
@@ -75,6 +76,12 @@ const LABEL: Record<Key, string> = {
             <option value="both">comprado e vendido (long e short)</option>
             <option value="long">só comprado (long)</option>
           </select><span class="hint">"só comprado" nunca abre short; o sinal de venda só fecha uma compra aberta</span></label>
+        <label class="field"><span>Canal de rompimento (barras)</span>
+          <input inputmode="numeric" [ngModel]="form()['QUANT_DONCHIAN']" (ngModelChange)="set('QUANT_DONCHIAN', $event)">
+          <span class="hint">entra quando o preço rompe a máxima/mínima das últimas N barras (validado: 55)</span></label>
+        <label class="field"><span>Filtro de tendência (ER mínimo)</span>
+          <input inputmode="decimal" [ngModel]="form()['QUANT_ER']" (ngModelChange)="set('QUANT_ER', $event)">
+          <span class="hint">0 a 1: só opera mercado em tendência limpa (validado: 0,5; abaixo disso a vantagem some)</span></label>
         <label class="field"><span>Stop (× ATR)</span>
           <input inputmode="decimal" [ngModel]="form()['QUANT_STOP_ATR']" (ngModelChange)="set('QUANT_STOP_ATR', $event)">
           <span class="hint">distância do stop em múltiplos do ATR</span></label>
@@ -84,6 +91,17 @@ const LABEL: Record<Key, string> = {
         <button class="btn ghost" [disabled]="!auth.canOperate() || busy() || !dirty()" (click)="reset()">Descartar</button>
       </div>
       <p class="note mt">Modo <b>live</b> e Polymarket não podem ser ligados por aqui (só por edição na VM).</p>
+    </section>
+
+    <section class="card mt">
+      <div class="card-h">
+        <div><h2>Receita validada em backtest</h2>
+          <div class="sub">19 criptos, barras de 1 h, filtro ER 0,5, canal 55, stop 2×ATR, comprado e vendido. Em 2 anos (o 2º, de queda de 42%)
+            ficou +38% fora da amostra, Sharpe 1,45, queda máxima de 20%; a metade comprada-só não passou no teste estatístico.</div></div>
+        <button class="btn primary" [disabled]="!auth.canOperate()" (click)="applyRecipe()">Aplicar receita</button>
+      </div>
+      <p class="note">Só preenche os campos acima; nada muda até você clicar em <b>Salvar e reiniciar</b>. Resultado passado não garante o futuro:
+        a vantagem medida é modesta (dezenas de % ao ano, com quedas de ~20%), e dobrar o capital exigiria alavancagem que também dobraria o risco.</p>
     </section>
 
     <section class="card mt">
@@ -223,6 +241,14 @@ export class OperatePage {
   protected pickCrypto(): void { this.write(this.markets.binance()); }
   protected pickEverything(): void { this.write(this.markets.ids()); }
   protected pickNone(): void { this.set('QUANT_ASSETS', ''); }
+
+  /** Receita da pesquisa (scripts/pesquisa_tendencia.py): so preenche o formulario; quem decide e quem clica em Salvar. */
+  protected applyRecipe(): void {
+    const ids = this.markets.binance().filter(a => a !== 'HYPE');  // HYPE tem so ~2 meses de historico: fora da amostra de 2 anos
+    this.form.update(f => ({ ...f, QUANT_TIMEFRAME: '1h', QUANT_ER: '0.5', QUANT_DONCHIAN: '55', QUANT_STOP_ATR: '2',
+                             QUANT_DIRECTION: 'both', QUANT_ASSETS: this.markets.ids().filter(x => ids.includes(x)).join(',') }));
+    this.toast.ok('Receita preenchida: revise e clique em Salvar e reiniciar');
+  }
 
   protected set(k: Key, v: string): void { this.form.update(f => ({ ...f, [k]: v })); }
   protected reset(): void { this.form.set({ ...this.initial() }); }

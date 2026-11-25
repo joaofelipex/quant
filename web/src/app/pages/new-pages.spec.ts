@@ -118,6 +118,27 @@ describe('telas de conta', () => {
       expect(btn('Tudo (4)')).toBeTruthy();
     });
 
+    it('operar: receita validada preenche 1h, ER 0,5, canal 55 e so as cripto da Binance (sem HYPE)', () => {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([]),
+          { provide: StatusStore, useValue: { data: signal(multi()), asset: signal(null), select: () => {}, banner: signal({ text: 'x', tone: 'ok' }), refresh: () => {} } }],
+      });
+      TestBed.inject(AuthService).me.set(me('operador'));
+      const mk = (id: string, binance: boolean) => ({ id, ticker: `KX${id}PERP1`, title: id, cls: 'Crypto', label: 'Cripto', binance });
+      const m = TestBed.inject(MarketsService);
+      m.markets.set([mk('BTC', true), mk('ETH', true), mk('HYPE', true), mk('KPEPE', false)]);
+      m.binance.set(['BTC', 'ETH', 'HYPE']);
+      const f = TestBed.createComponent(OperatePage);
+      f.detectChanges();
+      const el = f.nativeElement as HTMLElement;
+      [...el.querySelectorAll('button')].find(b => b.textContent!.includes('Aplicar receita'))!.click();
+      f.detectChanges();
+      expect(el.textContent).toContain('2 de 4');  // BTC e ETH marcados; HYPE e KPEPE nao
+      const on = [...el.querySelectorAll('button[aria-pressed="true"]')].map(b => b.textContent!.trim());
+      expect(on).toEqual(['BTC', 'ETH']);
+    });
+
     it('boleta: com varios ativos pede ativo e valor em USD', () => {
       TestBed.resetTestingModule();
       const t = setup(TicketPage, 'admin', false, { ...multi() }).textContent!;

@@ -26,6 +26,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 SERVICE = "quant-live"
 ENV_WHITELIST = ("QUANT_MODE", "QUANT_VENUE", "QUANT_SYMBOL", "QUANT_TIMEFRAME", "QUANT_QTY", "QUANT_MAX_DAILY_LOSS",
                  "QUANT_STOP_ATR", "QUANT_TESTNET_KIND", "QUANT_ASSETS", "QUANT_NOTIONAL", "QUANT_MAX_TOTAL_LOSS",
+                 "QUANT_DONCHIAN", "QUANT_ER",
                  "QUANT_DIRECTION")
 RUNTIME_ENV = Path("/var/lib/quant/runtime.env")
 VERBS = ("start", "stop", "restart")
@@ -40,6 +41,18 @@ def _enum(*opts):
         if v not in opts:
             raise SettingError(f"valor invalido {v!r}; use um de {', '.join(opts)}")
         return v
+    return check
+
+
+def _int(lo: int, hi: int):
+    def check(v: str) -> str:
+        try:
+            x = int(float(v))
+        except ValueError:
+            raise SettingError(f"{v!r} nao e numero inteiro") from None
+        if not (lo <= x <= hi):
+            raise SettingError(f"{v} fora do intervalo [{lo}, {hi}]")
+        return str(x)
     return check
 
 
@@ -72,6 +85,8 @@ SETTINGS = {
     "QUANT_QTY": _num(0, 1.0),
     "QUANT_MAX_DAILY_LOSS": _num(0, 1000),
     "QUANT_STOP_ATR": _num(0, 10),
+    "QUANT_DONCHIAN": _int(2, 500),
+    "QUANT_ER": _num(0, 1),
     "QUANT_DIRECTION": _enum("both", "long"),
     "QUANT_ASSETS": _assets,
     "QUANT_NOTIONAL": _num(0, 1000),

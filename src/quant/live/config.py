@@ -51,6 +51,17 @@ def build_feed(mode: str, symbol: str, timeframe: str, kind: str, choice: str = 
     return CcxtFeed(symbol, timeframe, testnet=(mode == "testnet"), testnet_kind=kind)
 
 
+def make_signals(env=os.environ.get):
+    """Estrategia de tendencia (a do backtest). Canal Donchian e filtro de regime ER vem do ambiente. A pesquisa em 19
+    cripto, 1 h, 2 anos fora da amostra (scripts/pesquisa_tendencia.py) so achou vantagem com ER >= 0,5, canal 55."""
+    dc, er = int(env("QUANT_DONCHIAN", "20")), float(env("QUANT_ER", "0.5"))
+
+    def signals(bars):  # cripto opera 24h, entao a janela de sessao e o dia todo
+        return tf.generate_signals(tf.add_indicators(bars, donchian_period=dc), session_start="00:00",
+                                   session_end="23:59", er_threshold=er)
+    return signals
+
+
 def build_runner() -> Runner:
     env = os.environ.get
     mode = env("QUANT_MODE", "paper")  # paper | testnet | live
@@ -81,8 +92,7 @@ def build_runner() -> Runner:
     risk = RiskManager(RiskLimits(max_qty=float(env("QUANT_MAX_QTY", str(qty))),
                                   max_daily_loss=float(env("QUANT_MAX_DAILY_LOSS", "20"))))
 
-    def signals(bars):  # mesma estrategia do backtest; cripto opera 24h, entao a janela de sessao e o dia todo
-        return tf.generate_signals(tf.add_indicators(bars), session_start="00:00", session_end="23:59")
+    signals = make_signals(env)
 
     feed = build_feed(mode, symbol, tfm, kind, env("QUANT_FEED", "auto"), venue)
     return Runner(feed, executor, risk, signals, qty=qty,
@@ -106,8 +116,7 @@ def build_multi(env=os.environ.get) -> MultiRunner:
     state_dir = Path(env("QUANT_STATE", "live_state.json")).parent
     kill, trades = env("QUANT_KILL_FILE", "KILL"), env("QUANT_TRADES_LOG") or None
 
-    def signals(bars):
-        return tf.generate_signals(tf.add_indicators(bars), session_start="00:00", session_end="23:59")
+    signals = make_signals(env)
 
     def prepare(a: str) -> Runner | None:
         try:
