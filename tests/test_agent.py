@@ -407,7 +407,8 @@ class TestApiDoAgente:
         code, out, _ = go(base + path, method, body, cookie)
         return code, out
 
-    def test_estado_inicial_desligado_e_sem_chave(self, srv):
+    def test_estado_inicial_desligado_e_sem_chave(self, srv, tmp_path, monkeypatch):
+        monkeypatch.setenv("QUANT_CLAUDE_HOME", str(tmp_path / "sem-login"))  # nao depende do login da CLI da maquina
         base, _, _ = srv
         code, d = self.call(base, "/api/agent")
         assert code == 200 and d["config"]["enabled"] is False and d["chave"] is False and d["decisoes"] == []
