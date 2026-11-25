@@ -149,7 +149,8 @@ def build_multi(env=os.environ.get) -> MultiRunner:
                           long_only=env("QUANT_DIRECTION", "both") == "long",
                           state_path=state_dir / f"live_state.{a}.json",
                           kill_file=kill, trades_path=trades, label=f"{venue}/{mode}:{a}",
-                          flow_gate=flow_gate(a, flow_min) if flow_min > 0 else None)
+                          flow_gate=flow_gate(a, flow_min) if flow_min > 0 else None,
+                          trail_atr=float(env("QUANT_TRAIL_ATR", "0")), vol_size=env("QUANT_VOL_SIZE", "0") == "1")
         except Exception:  # noqa: BLE001 - um mercado fora do ar nao pode impedir os outros de subirem
             log.exception("nao consegui preparar %s; seguindo sem ele", a)
             return None

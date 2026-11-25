@@ -715,3 +715,52 @@ class TestFiltroDeFluxo:
 
     def test_sem_foto_do_livro_nao_entra(self):
         assert not config.flow_gate("BTC", 0.1, snap=lambda a: None)(1)
+
+
+class TestTrailingEVolatilidade:
+    BARS = lambda self, hi, lo: pd.DataFrame({  # noqa: E731
+        "datetime": pd.date_range("2026-01-01", periods=len(hi), freq="1min"), "open": 100.0, "high": hi, "low": lo,
+        "close": 100.0})
+
+    def runner(self, trail=3.0, **kw):
+        ex = PaperExecutor()
+        r = Runner(type("F", (), {"closed_bars": lambda s, n: None})(), ex,
+                   RiskManager(RiskLimits(max_qty=1e9, max_daily_loss=1e9)), lambda b: b, qty=1.0, timeframe="1m",
+                   stop_atr=2.0, trail_atr=trail, state_path="/nao/grava.json", **kw)
+        ex.market_order(1, 1.0, 100.0)
+        r.entry, r.stop, r.stop_dist, r.ext = {"side": 1, "qty": 1.0, "price": 100.0}, 96.0, 4.0, 100.0  # ATR = 2
+        return r, ex
+
+    def test_trailing_sobe_o_stop_atras_da_maxima_e_nunca_desce(self):
+        r, _ = self.runner()
+        assert r._first_stop_hit(self.BARS([110.0, 112.0], [99.0, 106.0]), 1) is None
+        assert r.ext == 112.0 and r.stop == pytest.approx(112.0 - 3.0 * 2.0)  # 106
+        assert r._first_stop_hit(self.BARS([108.0], [107.0]), 1) is None
+        assert r.stop == pytest.approx(106.0)  # barra mais fraca: o stop nao desce
+
+    def test_sem_trailing_o_stop_fica_fixo(self):
+        r, _ = self.runner(trail=0.0)
+        assert r._first_stop_hit(self.BARS([120.0], [99.0]), 1) is None and r.stop == 96.0
+
+    def test_trailing_para_short_desce_o_stop(self):
+        r, ex = self.runner()
+        r.entry, r.stop, r.ext = {"side": -1, "qty": 1.0, "price": 100.0}, 104.0, 100.0
+        assert r._first_stop_hit(self.BARS([101.0], [90.0]), -1) is None
+        assert r.stop == pytest.approx(90.0 + 6.0)
+
+    def test_barra_que_toca_o_stop_fecha_antes_de_subi_lo(self):
+        r, _ = self.runner()
+        assert r._first_stop_hit(self.BARS([130.0], [90.0]), 1) == 96.0
+
+    def test_peso_por_volatilidade(self):
+        r, _ = self.runner(vol_size=True)
+        sig = pd.DataFrame({"atr": [1.0] * 10, "close": [100.0] * 10})  # ATR% tipico = 1%
+        assert r._weight(sig, 100.0) == 1.0                      # igual ao normal
+        assert r._weight(sig.assign(atr=[1.0] * 9 + [2.0]), 100.0) == 0.5   # o dobro de volatilidade: metade
+        assert r._weight(sig.assign(atr=[1.0] * 9 + [0.1]), 100.0) == 2.0   # muito calmo: limite de 2x
+        r2, _ = self.runner()
+        assert r2._weight(sig.assign(atr=[1.0] * 9 + [2.0]), 100.0) == 1.0  # desligado
+
+    def test_tamanho_escala_com_o_peso(self):
+        r, _ = self.runner(notional=10.0)
+        assert r._size(100.0, 0.5) == pytest.approx(0.05)

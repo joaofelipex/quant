@@ -13,12 +13,12 @@ import { ToastService } from '../shared/toast';
 
 export const SETTING_KEYS = ['QUANT_MODE', 'QUANT_VENUE', 'QUANT_TIMEFRAME', 'QUANT_QTY', 'QUANT_MAX_DAILY_LOSS',
                              'QUANT_STOP_ATR', 'QUANT_ASSETS', 'QUANT_NOTIONAL', 'QUANT_MAX_TOTAL_LOSS', 'QUANT_DIRECTION', 'QUANT_DONCHIAN',
-                             'QUANT_ER', 'QUANT_FLOW_MIN'] as const;
+                             'QUANT_ER', 'QUANT_FLOW_MIN', 'QUANT_TRAIL_ATR', 'QUANT_VOL_SIZE'] as const;
 type Key = (typeof SETTING_KEYS)[number];
 
 const LABEL: Record<Key, string> = {
   QUANT_MODE: 'modo', QUANT_VENUE: 'corretora', QUANT_TIMEFRAME: 'timeframe', QUANT_QTY: 'quantidade',
-  QUANT_MAX_DAILY_LOSS: 'perda máxima/dia', QUANT_STOP_ATR: 'stop (× ATR)', QUANT_ASSETS: 'ativos', QUANT_DIRECTION: 'direção', QUANT_DONCHIAN: 'canal (barras)', QUANT_ER: 'filtro ER', QUANT_FLOW_MIN: 'filtro de fluxo',
+  QUANT_MAX_DAILY_LOSS: 'perda máxima/dia', QUANT_STOP_ATR: 'stop (× ATR)', QUANT_ASSETS: 'ativos', QUANT_DIRECTION: 'direção', QUANT_DONCHIAN: 'canal (barras)', QUANT_ER: 'filtro ER', QUANT_FLOW_MIN: 'filtro de fluxo', QUANT_TRAIL_ATR: 'trailing (× ATR)', QUANT_VOL_SIZE: 'tamanho por volatilidade',
   QUANT_NOTIONAL: 'valor por entrada (USD)', QUANT_MAX_TOTAL_LOSS: 'perda máxima total/dia',
 };
 
@@ -85,6 +85,14 @@ const LABEL: Record<Key, string> = {
         <label class="field"><span>Filtro de fluxo (0 = desligado)</span>
           <input inputmode="decimal" [ngModel]="form()['QUANT_FLOW_MIN']" (ngModelChange)="set('QUANT_FLOW_MIN', $event)">
           <span class="hint">0 a 1: só entra se o livro de ofertas apoiar o lado (ex.: 0,2 = 20% mais compra que venda para comprar)</span></label>
+        <label class="field"><span>Trailing stop (× ATR, 0 = desligado)</span>
+          <input inputmode="decimal" [ngModel]="form()['QUANT_TRAIL_ATR']" (ngModelChange)="set('QUANT_TRAIL_ATR', $event)">
+          <span class="hint">o stop sobe atrás do melhor preço, a essa distância, e nunca desce (testado: 3)</span></label>
+        <label class="field"><span>Tamanho por volatilidade</span>
+          <select [ngModel]="form()['QUANT_VOL_SIZE'] || '0'" (ngModelChange)="set('QUANT_VOL_SIZE', $event)">
+            <option value="0">desligado (mesmo valor em todo ativo)</option>
+            <option value="1">ligado (menor onde o ativo está mais volátil)</option>
+          </select><span class="hint">de 0,5× a 2× o valor por entrada</span></label>
         <label class="field"><span>Stop (× ATR)</span>
           <input inputmode="decimal" [ngModel]="form()['QUANT_STOP_ATR']" (ngModelChange)="set('QUANT_STOP_ATR', $event)">
           <span class="hint">distância do stop em múltiplos do ATR</span></label>
@@ -248,7 +256,7 @@ export class OperatePage {
   /** Receita da pesquisa (scripts/pesquisa_tendencia.py): so preenche o formulario; quem decide e quem clica em Salvar. */
   protected applyRecipe(): void {
     const ids = this.markets.binance().filter(a => a !== 'HYPE');  // HYPE tem so ~2 meses de historico: fora da amostra de 2 anos
-    this.form.update(f => ({ ...f, QUANT_TIMEFRAME: '1h', QUANT_ER: '0.5', QUANT_DONCHIAN: '55', QUANT_STOP_ATR: '2',
+    this.form.update(f => ({ ...f, QUANT_TIMEFRAME: '1h', QUANT_ER: '0.5', QUANT_DONCHIAN: '55', QUANT_STOP_ATR: '2', QUANT_TRAIL_ATR: '3', QUANT_VOL_SIZE: '1',
                              QUANT_DIRECTION: 'both', QUANT_ASSETS: this.markets.ids().filter(x => ids.includes(x)).join(',') }));
     this.toast.ok('Receita preenchida: revise e clique em Salvar e reiniciar');
   }

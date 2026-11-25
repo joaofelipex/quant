@@ -26,7 +26,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 SERVICE = "quant-live"
 ENV_WHITELIST = ("QUANT_MODE", "QUANT_VENUE", "QUANT_SYMBOL", "QUANT_TIMEFRAME", "QUANT_QTY", "QUANT_MAX_DAILY_LOSS",
                  "QUANT_STOP_ATR", "QUANT_TESTNET_KIND", "QUANT_ASSETS", "QUANT_NOTIONAL", "QUANT_MAX_TOTAL_LOSS",
-                 "QUANT_DONCHIAN", "QUANT_ER", "QUANT_FLOW_MIN",
+                 "QUANT_DONCHIAN", "QUANT_ER", "QUANT_FLOW_MIN", "QUANT_TRAIL_ATR", "QUANT_VOL_SIZE",
                  "QUANT_DIRECTION")
 RUNTIME_ENV = Path("/var/lib/quant/runtime.env")
 VERBS = ("start", "stop", "restart")
@@ -88,6 +88,8 @@ SETTINGS = {
     "QUANT_DONCHIAN": _int(2, 500),
     "QUANT_ER": _num(0, 1),
     "QUANT_FLOW_MIN": _num(0, 1),
+    "QUANT_TRAIL_ATR": _num(0, 10),
+    "QUANT_VOL_SIZE": _enum("0", "1"),
     "QUANT_DIRECTION": _enum("both", "long"),
     "QUANT_ASSETS": _assets,
     "QUANT_NOTIONAL": _num(0, 1000),

@@ -50,11 +50,14 @@ class Runner:
                  state_path: str | Path = "live_state.json", kill_file: str | Path = "KILL",
                  now_fn: Callable[[], pd.Timestamp] = _utc_now, trades_path: str | Path | None = None,
                  label: str = "", notional: float | None = None, long_only: bool = False,
-                 flow_gate: Callable[[int], bool] | None = None):
+                 flow_gate: Callable[[int], bool] | None = None, trail_atr: float = 0.0, vol_size: bool = False):
         self.feed, self.executor, self.risk, self.signals = feed, executor, risk, signals
         self.qty, self.stop_atr, self.warmup = qty, stop_atr, warmup
         self.long_only = long_only  # so ABRE comprado; o sinal de venda continua fechando uma compra aberta
         self.flow_gate = flow_gate  # confirma a entrada pelo livro de ofertas: gate(lado) -> True se o fluxo apoia
+        self.trail_atr = trail_atr  # >0: o stop sobe (nunca desce) a trail_atr x ATR do melhor preco da entrada
+        self.vol_size = vol_size  # True: entrada menor se o ativo esta mais volatil que o normal (0,5x a 2x)
+        self.ext: float | None = None  # melhor preco desde a entrada (maxima na compra, minima na venda)
         self.notional = notional  # se informado, cada entrada vale ~este valor (USD) e ``qty`` e ignorada
         self.bar_s = TIMEFRAME_SECONDS[timeframe]
         self.state_path, self.kill_file, self.now_fn = Path(state_path), Path(kill_file), now_fn
@@ -66,14 +69,24 @@ class Runner:
         self.entry: dict | None = None  # entrada CONFIRMADA: side, qty, price
         self._restore()
 
-    def _size(self, price: float) -> float:
+    def _size(self, price: float, weight: float = 1.0) -> float:
         """Quantidade da proxima entrada: fixa (``qty``) ou ``notional`` / preco (mesmo valor em qualquer ativo)."""
-        return self.notional / price if self.notional else self.qty
+        return weight * self.notional / price if self.notional else self.qty
+
+    def _weight(self, sigs: pd.DataFrame, price: float) -> float:
+        """Peso da entrada: ATR% tipico do ativo / ATR% de agora, limitado a 0,5x..2x (como no backtest)."""
+        if not self.vol_size:
+            return 1.0
+        apct = (sigs["atr"] / sigs["close"]).replace([float("inf"), -float("inf")], float("nan")).dropna()
+        now = float(sigs["atr"].iloc[-1]) / price
+        if apct.empty or not now > 0:
+            return 1.0
+        return min(2.0, max(0.5, float(apct.median()) / now))
 
     # ---- estado -----------------------------------------------------------------------------------------------
     def _save(self) -> None:
         s = {"last_bar": str(self.last_bar) if self.last_bar is not None else None, "stop": self.stop,
-             "stop_dist": self.stop_dist, "entry": self.entry, "risk": self.risk.state(),
+             "stop_dist": self.stop_dist, "entry": self.entry, "ext": self.ext, "risk": self.risk.state(),
              "executor": self.executor.export_state()}
         tmp = self.state_path.with_suffix(".tmp")
         tmp.write_text(json.dumps(s))
@@ -84,6 +97,7 @@ class Runner:
             s = json.loads(self.state_path.read_text())
             self.last_bar = pd.Timestamp(s["last_bar"]) if s.get("last_bar") else None
             self.stop, self.stop_dist, self.entry = s.get("stop"), s.get("stop_dist"), s.get("entry")
+            self.ext = s.get("ext")
             self.risk.load(s.get("risk", {}))
             if s.get("executor") is not None:
                 self.executor.import_state(s["executor"])  # paper: a posicao simulada sobrevive ao reinicio
@@ -92,7 +106,7 @@ class Runner:
             log.error("posicao aberta sem stop conhecido (%s): travando entradas, feche manualmente", pos)
             self.risk.halt("posicao orfa na partida")
         if pos is None:
-            self.stop = self.stop_dist = self.entry = None
+            self.stop = self.stop_dist = self.entry = self.ext = None
 
     def _record_trade(self, ts: pd.Timestamp, side: int, qty: float, entry: float, exit_: float, pnl: float,
                       why: str) -> None:
@@ -122,7 +136,7 @@ class Runner:
         pos = self.executor.position()
         fill = self.executor.close_position(price)
         self._cancel_stops()  # depois de fechar: um stop velho nao pode sobrar para a proxima posicao
-        self.stop = self.stop_dist = self.entry = None
+        self.stop = self.stop_dist = self.entry = self.ext = None
         if pos is None or fill is None:
             return
         pnl = (fill.price - pos.entry) * pos.side * pos.qty - fill.fee  # taxa de entrada nao rastreada: aproximacao
@@ -154,7 +168,7 @@ class Runner:
                                    "stop da corretora (estimado)")
                 log.warning("posicao fechada fora do runner (stop da corretora?); pnl estimado %.2f", pnl)
                 self._cancel_stops()
-            self.stop = self.stop_dist = self.entry = None  # inclui entrada que nao chegou a preencher
+            self.stop = self.stop_dist = self.entry = self.ext = None  # inclui entrada que nao chegou a preencher
         elif self.entry is None and self.stop_dist is not None:  # preencheu mas a confirmacao se perdeu: adota
             self.entry = {"side": pos.side, "qty": pos.qty, "price": pos.entry}
             self.stop = pos.entry - pos.side * self.stop_dist
@@ -174,7 +188,18 @@ class Runner:
                 return min(float(b.open), self.stop)
             if side == -1 and b.high >= self.stop:
                 return max(float(b.open), self.stop)
+            self._trail(b, side)  # a barra nao tocou o stop: ela pode subir o stop para a proxima
         return None
+
+    def _trail(self, b, side: int) -> None:
+        """Trailing: o stop acompanha o melhor preco a trail_atr x ATR (da entrada) e nunca anda contra a posicao."""
+        if not self.trail_atr or not self.stop_dist or not self.stop_atr:
+            return
+        if self.ext is None:
+            self.ext = float(self.entry["price"]) if self.entry else float(b.open)
+        self.ext = max(self.ext, float(b.high)) if side == 1 else min(self.ext, float(b.low))
+        new = self.ext - side * self.trail_atr * self.stop_dist / self.stop_atr
+        self.stop = max(self.stop, new) if side == 1 else min(self.stop, new)
 
     # ---- um passo ---------------------------------------------------------------------------------------------
     def step(self) -> str:
@@ -203,12 +228,18 @@ class Runner:
                 self.risk.halt("lacuna de dados com posicao aberta")
                 pos, result = None, "lacuna"
             else:
+                before = self.stop
                 hit = self._first_stop_hit(new, pos.side)
                 if hit is not None:
                     self._close(hit, now, "stop")
                     pos, result = None, "stop"
+                elif self.stop != before:  # o trailing subiu o stop: leva o novo preco para a corretora
+                    log.info("trailing: stop %.4f -> %.4f", before, self.stop)
+                    if not self._protect(pos.side, pos.qty, now):
+                        pos, result = None, "sem_protecao"
 
-        row = self.signals(bars).iloc[-1]
+        sigs = self.signals(bars)
+        row = sigs.iloc[-1]
         sig = int(row["signal"])
         if pos is not None and sig == -pos.side:
             self._close(float(last["close"]), now, "sinal oposto")
@@ -220,10 +251,11 @@ class Runner:
             log.info("entrada %+d sem apoio do fluxo: pulada", entry_sig)
             result = "sem_fluxo"
         if pos is None and entry_sig != 0 and result == "ok" and atr_ok:
-            ok, why = self.risk.check_entry(self._size(float(last["close"])), now, bar_close)
+            weight = self._weight(sigs, float(last["close"]))
+            ok, why = self.risk.check_entry(self._size(float(last["close"]), weight), now, bar_close)
             if ok:
                 try:
-                    protected = self._enter(entry_sig, float(last["close"]), float(row["atr"]), now)
+                    protected = self._enter(entry_sig, float(last["close"]), float(row["atr"]), now, weight)
                     result = "entrada" if protected else "sem_protecao"
                 except InsufficientFunds as e:  # sem margem: pula esta barra (repetir a cada 5 s so martela a API)
                     log.warning("entrada pulada: %s", e)
@@ -236,13 +268,14 @@ class Runner:
         self._save()
         return result
 
-    def _enter(self, sig: int, hint: float, atr: float, now: pd.Timestamp) -> bool:
+    def _enter(self, sig: int, hint: float, atr: float, now: pd.Timestamp, weight: float = 1.0) -> bool:
         """Entra a mercado e protege. Devolve False se a posicao teve de ser fechada por falta de stop."""
         self.stop_dist = self.stop_atr * atr
         self.stop, self.entry = hint - sig * self.stop_dist, None  # provisorios; salvos antes de mandar a ordem
         self._save()
-        fill = self.executor.market_order(sig, self._size(hint), hint)
+        fill = self.executor.market_order(sig, self._size(hint, weight), hint)
         self.entry = {"side": sig, "qty": fill.qty, "price": fill.price}
+        self.ext = fill.price
         self.stop = fill.price - sig * self.stop_dist
         log.info("entrada %+d @ %.4f stop=%.4f", sig, fill.price, self.stop)
         return self._protect(sig, fill.qty, now)
