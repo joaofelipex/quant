@@ -679,3 +679,39 @@ class TestParametrosDaEstrategia:
         for bad in ({"QUANT_DONCHIAN": "1"}, {"QUANT_DONCHIAN": "x"}, {"QUANT_ER": "1.5"}, {"QUANT_ER": "0"}):
             with pytest.raises(control.SettingError):
                 control.write_runtime(p, bad)
+
+
+class TestFiltroDeFluxo:
+    """QUANT_FLOW_MIN: so entra se o livro de ofertas apoiar o lado do sinal."""
+
+    def runner(self, sinal, gate):
+        bars = pd.DataFrame({"datetime": pd.date_range("2026-01-01", periods=5, freq="1min"),
+                             "open": 50.0, "high": 51.0, "low": 49.0, "close": 50.0})
+
+        class Feed:
+            def closed_bars(self, n):
+                return bars
+
+        ex = PaperExecutor()
+        r = Runner(Feed(), ex, RiskManager(RiskLimits(max_qty=1e9, max_daily_loss=1e9)),
+                   lambda b: b.assign(signal=sinal, atr=1.0), qty=1.0, timeframe="1m", state_path="/nao/grava.json",
+                   flow_gate=gate)
+        r._save = lambda: None
+        r.now_fn = lambda: pd.Timestamp("2026-01-01 00:05:10")
+        return r, ex
+
+    def test_sem_apoio_do_fluxo_nao_entra(self):
+        r, ex = self.runner(1, lambda side: False)
+        assert r.step() == "sem_fluxo" and ex.position() is None
+
+    def test_com_apoio_do_fluxo_entra(self):
+        r, ex = self.runner(1, lambda side: True)
+        assert r.step() == "entrada" and ex.position().side == 1
+
+    def test_gate_exige_desequilibrio_no_lado_do_sinal(self):
+        g = config.flow_gate("BTC", 0.2, snap=lambda a: {"imb_100": 0.5})
+        assert g(1) and not g(-1)
+        assert not config.flow_gate("BTC", 0.6, snap=lambda a: {"imb_100": 0.5})(1)
+
+    def test_sem_foto_do_livro_nao_entra(self):
+        assert not config.flow_gate("BTC", 0.1, snap=lambda a: None)(1)

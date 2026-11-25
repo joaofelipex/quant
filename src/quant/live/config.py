@@ -102,6 +102,18 @@ def build_runner() -> Runner:
                   trades_path=env("QUANT_TRADES_LOG") or None, label=f"{venue}/{mode}")
 
 
+def flow_gate(asset: str, minimum: float, snap=None):
+    """Filtro de entrada pelo livro de ofertas: so deixa entrar se o desequilibrio (-1..+1) apoiar o lado do sinal em
+    pelo menos ``minimum``. Sem foto util do livro, NAO entra (na duvida, fica de fora)."""
+    from .. import flow
+    snap = snap or flow.snapshot_one
+
+    def gate(side: int) -> bool:
+        f = snap(asset)
+        return f is not None and side * float(f["imb_100"]) >= minimum
+    return gate
+
+
 def build_multi(env=os.environ.get) -> MultiRunner:
     """Um runner por ativo de ``QUANT_ASSETS`` (so Kalshi). Tamanho por valor: ``QUANT_NOTIONAL`` (USD) por entrada."""
     mode, venue = env("QUANT_MODE", "paper"), env("QUANT_VENUE", "binance")
@@ -117,6 +129,7 @@ def build_multi(env=os.environ.get) -> MultiRunner:
     kill, trades = env("QUANT_KILL_FILE", "KILL"), env("QUANT_TRADES_LOG") or None
 
     signals = make_signals(env)
+    flow_min = float(env("QUANT_FLOW_MIN", "0"))  # 0 = sem filtro de fluxo
 
     def prepare(a: str) -> Runner | None:
         try:
@@ -135,7 +148,8 @@ def build_multi(env=os.environ.get) -> MultiRunner:
                           stop_atr=float(env("QUANT_STOP_ATR", "2.0")),
                           long_only=env("QUANT_DIRECTION", "both") == "long",
                           state_path=state_dir / f"live_state.{a}.json",
-                          kill_file=kill, trades_path=trades, label=f"{venue}/{mode}:{a}")
+                          kill_file=kill, trades_path=trades, label=f"{venue}/{mode}:{a}",
+                          flow_gate=flow_gate(a, flow_min) if flow_min > 0 else None)
         except Exception:  # noqa: BLE001 - um mercado fora do ar nao pode impedir os outros de subirem
             log.exception("nao consegui preparar %s; seguindo sem ele", a)
             return None

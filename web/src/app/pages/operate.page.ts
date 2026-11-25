@@ -13,12 +13,12 @@ import { ToastService } from '../shared/toast';
 
 export const SETTING_KEYS = ['QUANT_MODE', 'QUANT_VENUE', 'QUANT_TIMEFRAME', 'QUANT_QTY', 'QUANT_MAX_DAILY_LOSS',
                              'QUANT_STOP_ATR', 'QUANT_ASSETS', 'QUANT_NOTIONAL', 'QUANT_MAX_TOTAL_LOSS', 'QUANT_DIRECTION', 'QUANT_DONCHIAN',
-                             'QUANT_ER'] as const;
+                             'QUANT_ER', 'QUANT_FLOW_MIN'] as const;
 type Key = (typeof SETTING_KEYS)[number];
 
 const LABEL: Record<Key, string> = {
   QUANT_MODE: 'modo', QUANT_VENUE: 'corretora', QUANT_TIMEFRAME: 'timeframe', QUANT_QTY: 'quantidade',
-  QUANT_MAX_DAILY_LOSS: 'perda máxima/dia', QUANT_STOP_ATR: 'stop (× ATR)', QUANT_ASSETS: 'ativos', QUANT_DIRECTION: 'direção', QUANT_DONCHIAN: 'canal (barras)', QUANT_ER: 'filtro ER',
+  QUANT_MAX_DAILY_LOSS: 'perda máxima/dia', QUANT_STOP_ATR: 'stop (× ATR)', QUANT_ASSETS: 'ativos', QUANT_DIRECTION: 'direção', QUANT_DONCHIAN: 'canal (barras)', QUANT_ER: 'filtro ER', QUANT_FLOW_MIN: 'filtro de fluxo',
   QUANT_NOTIONAL: 'valor por entrada (USD)', QUANT_MAX_TOTAL_LOSS: 'perda máxima total/dia',
 };
 
@@ -82,6 +82,9 @@ const LABEL: Record<Key, string> = {
         <label class="field"><span>Filtro de tendência (ER mínimo)</span>
           <input inputmode="decimal" [ngModel]="form()['QUANT_ER']" (ngModelChange)="set('QUANT_ER', $event)">
           <span class="hint">0 a 1: só opera mercado em tendência limpa (validado: 0,5; abaixo disso a vantagem some)</span></label>
+        <label class="field"><span>Filtro de fluxo (0 = desligado)</span>
+          <input inputmode="decimal" [ngModel]="form()['QUANT_FLOW_MIN']" (ngModelChange)="set('QUANT_FLOW_MIN', $event)">
+          <span class="hint">0 a 1: só entra se o livro de ofertas apoiar o lado (ex.: 0,2 = 20% mais compra que venda para comprar)</span></label>
         <label class="field"><span>Stop (× ATR)</span>
           <input inputmode="decimal" [ngModel]="form()['QUANT_STOP_ATR']" (ngModelChange)="set('QUANT_STOP_ATR', $event)">
           <span class="hint">distância do stop em múltiplos do ATR</span></label>
