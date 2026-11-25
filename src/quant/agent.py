@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import subprocess
 import sys
 import time
 import urllib.error
@@ -324,6 +325,45 @@ def call_claude(system: str, user: str, *, model: str, key: str, max_tokens: int
     raise LLMError("o modelo nao chamou a ferramenta decide")
 
 
+CLAUDE_HOME = Path("/var/lib/quant/claude-home")  # HOME do usuario do servico: onde fica o login da CLI do Claude
+
+
+def call_cli(system: str, user: str, *, model: str, binary: str = "claude", home: Path = CLAUDE_HOME,
+             timeout: float = 120.0, run=subprocess.run) -> tuple[dict, dict]:
+    """Mesma decisao, pela CLI do Claude (``claude -p``) com o login da conta, sem chave de API.
+
+    Sem ferramentas (``--tools ""``), sem sessao gravada e so a saida estruturada pelo esquema de ``decide``: a CLI nao
+    pode ler arquivo nem rodar comando; so devolve o JSON da decisao, que passa pelas mesmas travas do codigo."""
+    cmd = [binary, "-p", "--model", model, "--output-format", "json", "--json-schema", json.dumps(TOOL["input_schema"]),
+           "--system-prompt", system, "--tools", "", "--no-session-persistence", "--setting-sources", ""]
+    env = {**os.environ, "HOME": str(home)}
+    try:
+        p = run(cmd, input=user, capture_output=True, text=True, timeout=timeout, env=env)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise LLMError(f"falha ao chamar a CLI: {e}") from None
+    try:
+        data = json.loads(p.stdout)
+    except ValueError:
+        raise LLMError(f"CLI sem JSON (codigo {p.returncode}): {(p.stderr or p.stdout)[:300]}") from None
+    if not isinstance(data, dict) or data.get("is_error"):
+        raise LLMError(f"CLI com erro: {str((data or {}).get('result', ''))[:300]}")
+    out = data.get("structured_output")
+    if not isinstance(out, dict):
+        try:
+            out = json.loads(data.get("result") or "")
+        except ValueError:
+            out = None
+    if not isinstance(out, dict):
+        raise LLMError("a CLI nao devolveu a decisao estruturada")
+    u = data.get("usage") or {}
+    return out, {"input_tokens": u.get("input_tokens", 0), "output_tokens": u.get("output_tokens", 0)}
+
+
+def cli_ready(env=os.environ.get) -> bool:
+    """A CLI so conta como pronta com o login gravado na pasta do servico."""
+    return (Path(env("QUANT_CLAUDE_HOME", str(CLAUDE_HOME))) / ".claude" / ".credentials.json").exists()
+
+
 # ---- ciclo ----------------------------------------------------------------------------------------------------------
 @dataclass
 class Deps:
@@ -558,7 +598,11 @@ def real_deps(env=os.environ.get, directory: Path = AGENT_DIR) -> Deps:
 
     return Deps(
         snapshot=lambda names: flow.snapshot_many(names), candles=candles, positions=positions,
-        llm=lambda s, u: call_claude(s, u, model=cfg["model"], key=key), execute=execute, runner=runner,
+        llm=(lambda s, u: call_cli(s, u, model=cfg["model"], binary=env("QUANT_CLAUDE_BIN", "claude"),
+                                    home=Path(env("QUANT_CLAUDE_HOME", str(CLAUDE_HOME)))))
+        if env("QUANT_AGENT_BACKEND", "api") == "cli"
+        else (lambda s, u: call_claude(s, u, model=cfg["model"], key=key)),
+        execute=execute, runner=runner,
         pnl_today=lambda now: trades_of_agent(trades, now)[0],
         last_close=lambda: trades_of_agent(trades, time.time())[1],
         kill=lambda: kill.exists(), mode_ok=lambda: env("QUANT_MODE") == "testnet" and env("QUANT_VENUE") == "kalshi",
@@ -583,8 +627,10 @@ def run_once(directory: Path = AGENT_DIR, *, force: bool = False, deps: Deps | N
     if not force and t - float(state.get("last_run", 0)) < cfg["interval_min"] * 60 - 5:
         return {"pulou": "intervalo"}
     state["last_run"] = t
-    if not env("ANTHROPIC_API_KEY", "") and deps is None:
-        state["last_error"] = "chave da IA nao configurada (/etc/quant/agent.env)"
+    cli = env("QUANT_AGENT_BACKEND", "api") == "cli"
+    if deps is None and not (cli_ready(env) if cli else env("ANTHROPIC_API_KEY", "")):
+        state["last_error"] = ("login da CLI do Claude nao encontrado (deploy/login-claude-cli.sh)" if cli
+                               else "chave da IA nao configurada (/etc/quant/agent.env)")
         _write_json(directory / "state.json", state)
         return {"erro": state["last_error"]}
     deps = deps or real_deps(env, directory)

@@ -159,7 +159,8 @@ def agent_status(directory: Path, key_file: Path = Path("/etc/quant/agent.env"))
     cfg = agent.load_config(directory / "config.json")
     state = agent.read_state(directory)
     pnl, _ = agent.trades_of_agent(Path(os.environ.get("QUANT_TRADES_LOG", "trades.csv")), time.time())
-    return {"config": cfg, "state": state, "chave": key_file.exists(), "modelos": list(agent.MODELS),
+    return {"config": cfg, "state": state, "chave": key_file.exists() or agent.cli_ready(os.environ.get),
+            "backend": os.environ.get("QUANT_AGENT_BACKEND", "api"), "modelos": list(agent.MODELS),
             "pnl_hoje": round(pnl, 4), "livro": agent.read_book(directory),
             "decisoes": agent.read_decisions(directory / "decisions.jsonl", 30)}
 

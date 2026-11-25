@@ -47,7 +47,7 @@ const FIELDS: { key: string; label: string; hint: string }[] = [
         <section class="card lock mb-3 flex gap-3 border-[var(--warn)]">
           <app-icon name="alert" />
           <div><b>A chave da IA ainda não foi gravada na VM.</b>
-            <p class="note">Rode, num terminal seu, <code>sudo bash /opt/quant/deploy/definir-chave-ia.sh</code> e cole a chave da API da Anthropic
+            <p class="note">Rode, num terminal seu, <code>sudo bash /opt/quant/deploy/definir-chave-ia.sh</code> e cole a chave da API da Anthropic, ou, para usar a CLI do Claude com a sua conta, <code>sudo bash /opt/quant/deploy/login-claude-cli.sh</code>
               (ela não aparece na tela e o painel nunca a lê). Sem ela o agente não liga.</p></div>
         </section>
       }

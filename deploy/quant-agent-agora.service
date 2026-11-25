@@ -16,6 +16,9 @@ Environment=QUANT_KILL_FILE=/var/lib/quant/KILL
 Environment=QUANT_TRADES_LOG=/var/lib/quant/trades.csv
 Environment=QUANT_AGENT_DIR=/var/lib/quant/agent
 Environment=QUANT_FLOW_DIR=/var/lib/quant/flow
+Environment=QUANT_AGENT_BACKEND=cli
+Environment=QUANT_CLAUDE_BIN=/usr/local/bin/claude
+Environment=QUANT_CLAUDE_HOME=/var/lib/quant/claude-home
 # o timer chama a cada minuto; o intervalo real (padrao 10 min) e o ligar/desligar vem da configuracao no painel
 ExecStart=/opt/quant/.venv/bin/python -m quant.agent run --force
 TimeoutStartSec=170

@@ -1,6 +1,7 @@
 """Agente de IA: travas de risco no CODIGO, configuracao, ciclo com falsos, chamada ao modelo e arquivos."""
 import io
 import json
+import types
 import urllib.error
 
 import pandas as pd
@@ -456,3 +457,44 @@ class TestApiDoAgente:
         assert "quant.agent run\n" in (dep / "quant-agent.service").read_text()
         assert "quant-agent-agora.service" in (dep / "50-quant-control.rules").read_text()
         assert "agent.env" not in (dep / "quant-control.service").read_text()  # o painel web nao carrega a chave da IA
+
+
+class TestCli:
+    """Backend pela CLI do Claude (``claude -p``): sem chave de API, so o login."""
+
+    def fake(self, stdout, code=0):
+        calls = []
+
+        def run(cmd, **kw):
+            calls.append((cmd, kw))
+            return types.SimpleNamespace(stdout=stdout, stderr="", returncode=code)
+        return run, calls
+
+    def test_devolve_a_decisao_estruturada_e_o_uso(self, tmp_path):
+        out = {"analise": "parado", "acoes": []}
+        run, calls = self.fake(json.dumps({"structured_output": out, "usage": {"input_tokens": 7, "output_tokens": 3}}))
+        got, uso = agent.call_cli("sys", "user", model="claude-haiku-5-5", home=tmp_path, run=run)
+        assert got == out and uso == {"input_tokens": 7, "output_tokens": 3}
+        cmd, kw = calls[0]
+        assert "--tools" in cmd and cmd[cmd.index("--tools") + 1] == ""  # sem ferramentas: so devolve o JSON
+        assert kw["input"] == "user" and kw["env"]["HOME"] == str(tmp_path)
+
+    def test_aceita_decisao_em_result_como_json(self, tmp_path):
+        run, _ = self.fake(json.dumps({"result": '{"analise": "x", "acoes": []}'}))
+        assert agent.call_cli("s", "u", model="m", home=tmp_path, run=run)[0]["analise"] == "x"
+
+    def test_erro_da_cli_e_saida_sem_decisao_viram_llmerror(self, tmp_path):
+        for stdout in (json.dumps({"is_error": True, "result": "not logged in"}), "nao e json",
+                       json.dumps({"result": "texto solto"})):
+            run, _ = self.fake(stdout)
+            with pytest.raises(agent.LLMError):
+                agent.call_cli("s", "u", model="m", home=tmp_path, run=run)
+
+    def test_sem_login_o_ciclo_nao_roda(self, tmp_path):
+        env = {"QUANT_AGENT_BACKEND": "cli", "QUANT_CLAUDE_HOME": str(tmp_path)}.get
+        agent.save_config(tmp_path / "config.json", {"enabled": True})
+        res = agent.run_once(tmp_path, env=env)
+        assert "login da CLI" in res["erro"]
+        (tmp_path / ".claude").mkdir()
+        (tmp_path / ".claude" / ".credentials.json").write_text("{}")
+        assert agent.cli_ready(env)
