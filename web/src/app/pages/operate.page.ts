@@ -78,16 +78,16 @@ const LABEL: Record<Key, string> = {
           </select><span class="hint">"só comprado" nunca abre short; o sinal de venda só fecha uma compra aberta</span></label>
         <label class="field"><span>Canal de rompimento (barras)</span>
           <input inputmode="numeric" [ngModel]="form()['QUANT_DONCHIAN']" (ngModelChange)="set('QUANT_DONCHIAN', $event)">
-          <span class="hint">entra quando o preço rompe a máxima/mínima das últimas N barras (validado: 55)</span></label>
+          <span class="hint">entra quando o preço rompe a máxima/mínima das últimas N barras (candidato: 55; não comprovado)</span></label>
         <label class="field"><span>Filtro de tendência (ER mínimo)</span>
           <input inputmode="decimal" [ngModel]="form()['QUANT_ER']" (ngModelChange)="set('QUANT_ER', $event)">
-          <span class="hint">0 a 1: só opera mercado em tendência limpa (validado: 0,5; abaixo disso a vantagem some)</span></label>
+          <span class="hint">0 a 1: só opera mercado em tendência limpa (candidato: 0,5; não comprovado)</span></label>
         <label class="field"><span>Filtro de fluxo (0 = desligado)</span>
           <input inputmode="decimal" [ngModel]="form()['QUANT_FLOW_MIN']" (ngModelChange)="set('QUANT_FLOW_MIN', $event)">
           <span class="hint">0 a 1: só entra se o livro de ofertas apoiar o lado (ex.: 0,2 = 20% mais compra que venda para comprar)</span></label>
         <label class="field"><span>Trailing stop (× ATR, 0 = desligado)</span>
           <input inputmode="decimal" [ngModel]="form()['QUANT_TRAIL_ATR']" (ngModelChange)="set('QUANT_TRAIL_ATR', $event)">
-          <span class="hint">o stop sobe atrás do melhor preço, a essa distância, e nunca desce (testado: 3)</span></label>
+          <span class="hint">o stop sobe atrás do melhor preço, a essa distância, e nunca desce (candidato: 3; não comprovado)</span></label>
         <label class="field"><span>Tamanho por volatilidade</span>
           <select [ngModel]="form()['QUANT_VOL_SIZE'] || '0'" (ngModelChange)="set('QUANT_VOL_SIZE', $event)">
             <option value="0">desligado (mesmo valor em todo ativo)</option>
@@ -106,9 +106,10 @@ const LABEL: Record<Key, string> = {
 
     <section class="card mt">
       <div class="card-h">
-        <div><h2>Receita validada em backtest</h2>
-          <div class="sub">19 criptos, barras de 1 h, filtro ER 0,5, canal 55, stop 2×ATR, comprado e vendido. Em 2 anos (o 2º, de queda de 42%)
-            ficou +38% fora da amostra, Sharpe 1,45, queda máxima de 20%; a metade comprada-só não passou no teste estatístico.</div></div>
+        <div><h2>Receita candidata (não aprovada)</h2>
+          <div class="sub">19 criptos, barras de 1 h, ER 0,5, canal 55, stop 2×ATR, trailing 3×ATR, tamanho por volatilidade. No 2º ano (de queda de 42%)
+            deu +22% fora da amostra, mas o DSR (correção por testar várias variantes) ficou em 0,2 a 0,5, abaixo de 0,95: não descarta sorte.
+            O estudo do repo reprovou esta estratégia em ETH. Roda na demo só para acumular evidência em tempo real.</div></div>
         <button class="btn primary" [disabled]="!auth.canOperate()" (click)="applyRecipe()">Aplicar receita</button>
       </div>
       <p class="note">Só preenche os campos acima; nada muda até você clicar em <b>Salvar e reiniciar</b>. Resultado passado não garante o futuro:
