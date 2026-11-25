@@ -101,6 +101,39 @@ def write_runtime(path: Path, updates: dict) -> dict[str, str]:
     return merged
 
 
+def reset_risk(state_path: Path, kill_file: Path, run=None) -> dict:
+    """Destrava a gestao de risco de todos os ativos: para o runner, zera ``halted`` e o PnL do dia nos estados e religa
+    se ele estava ligado. NAO toca em posicoes, stops nem na entrada de cada estado: se sobrar posicao sem stop, o
+    runner trava de novo sozinho ao subir. Recusa com o KILL presente (retomar apos kill e decisao humana, na VM)."""
+    if kill_file.exists():
+        return {"ok": False, "erro": "arquivo KILL presente: revise a posicao e remova-o na VM antes de destravar"}
+    run = run or (lambda cmd: subprocess.run(cmd, capture_output=True, text=True, timeout=30))
+    was_active = run(["systemctl", "is-active", SERVICE]).stdout.strip() == "active"
+    if was_active:
+        r = run(["systemctl", "stop", SERVICE])  # o runner guarda o risco em memoria: so e seguro editar com ele parado
+        if r.returncode:
+            return {"ok": False, "erro": f"nao consegui parar o runner: {(r.stderr or '').strip()[:200]}"}
+    changed = 0
+    for f in sorted(state_path.parent.glob("live_state*.json")):
+        if "paper" in f.name:
+            continue
+        st = read_state(f)
+        if not st or not isinstance(st.get("risk"), dict):
+            continue
+        risk = st["risk"]
+        if risk.get("halted") or risk.get("pnl") or risk.get("trades"):
+            risk.update(halted=False, reason="", halt_daily=False, pnl=0.0, trades=0)
+            tmp = f.with_suffix(".tmp")
+            tmp.write_text(json.dumps(st))
+            tmp.replace(f)
+            changed += 1
+    started = ""
+    if was_active:
+        r = run(["systemctl", "start", SERVICE])
+        started = "" if r.returncode == 0 else f"destravado, mas nao religou o runner: {(r.stderr or '').strip()[:200]}"
+    return {"ok": not started, "erro": started, "reset": changed, "religado": was_active and not started}
+
+
 ORDER_REQUEST = Path("/var/lib/quant/order-request.json")
 ORDER_RESULT = Path("/var/lib/quant/order-result.json")
 ORDER_UNIT = "quant-order.service"
@@ -587,6 +620,9 @@ def make_handler(state_path: Path, kill_file: Path, runtime_path: Path = RUNTIME
                 code, res = submit_order(body, Path(os.environ.get("QUANT_ORDER_REQUEST", str(ORDER_REQUEST))),
                                          Path(os.environ.get("QUANT_ORDER_RESULT", str(ORDER_RESULT))), run)
                 return self._json(code, res)
+            if path == "/api/risk/reset":
+                res = reset_risk(state_path, kill_file, run)
+                return self._json(200 if res["ok"] else 409, res)
             if path.startswith("/api/runner/"):
                 try:
                     res = runner_action(path.rsplit("/", 1)[1], kill_file, run)

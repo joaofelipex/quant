@@ -27,6 +27,7 @@ export class ApiService {
   order(req: OrderRequest): Observable<ActionResult & { id?: string }> { return this.post('api/order', req); }
   orderResult(): Observable<OrderResult> { return this.http.get<OrderResult>('api/order'); }
   kill() { return this.post('api/kill'); }
+  resetRisk() { return this.post('api/risk/reset'); }
   runSelfcheck() { return this.post('api/selfcheck/run'); }
   runDeploy() { return this.post('api/deploy/run'); }
   rollback() { return this.post('api/deploy/rollback'); }

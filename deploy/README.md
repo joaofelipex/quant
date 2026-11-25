@@ -184,6 +184,18 @@ dia chega nele; o kill-switch fecha todos em ~1 s. Tamanho por valor: `QUANT_NOT
 inteiros de cada ativo; ativos cujo menor contrato passa de 1,5 x esse valor ficam de fora (com aviso no log). A Visão geral mostra a
 tabela de ativos (com filtro); a Boleta pede ativo + valor em USD. Sem `QUANT_ASSETS` tudo funciona como antes (um ativo, `QUANT_QTY`).
 
+**Leitura de fluxo (gravador + estudo):** a estratégia hoje olha só o preço (velas). O livro de ofertas da Kalshi só existe "agora" (sem
+histórico), então para saber se o desequilíbrio compra/venda ajuda a entrar, é preciso **gravar e medir**. O `quant-flow.timer` tira uma
+foto por minuto dos ativos do runner (desequilíbrio em 0,25% e 1% do preço, topo do livro, spread; só leitura pública, sem chave) em
+`/var/lib/quant/flow/AAAA-MM-DD.csv`. Depois de alguns dias: `sudo -u quant /opt/quant/.venv/bin/python -m quant.flow study` mostra, por
+horizonte (1, 5, 15 min), o poder preditivo (IC, z), o retorno por quintil e o que sobra **depois do spread**. Só se houver sinal
+(|z| > 3 e líquido > 0) o desequilíbrio vira filtro de entrada. Instalação:
+`sudo cp deploy/quant-flow.service deploy/quant-flow.timer /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable --now quant-flow.timer`.
+
+**Trava de risco:** a trava por perda do dia (limite por ativo ou `QUANT_MAX_TOTAL_LOSS`) some sozinha na virada do dia UTC; as outras
+(kill-switch, posição órfã, falha de stop, lacuna de dados) ficam até decisão sua. Em Operar, admin tem o botão **Destravar risco**
+(para o runner, zera a trava e o PnL do dia de todos os ativos e religa; não toca em posições nem stops).
+
 **Boleta manual (Boleta):** comprar, vender, colocar stop e fechar a mão pelo painel, só na Kalshi **demo**. O painel não tem
 chave: ele grava um pedido validado e dispara `quant-order.service` (que tem a chave e recusa tudo que não seja `kalshi` +
 `testnet`). Abrir/proteger exige o runner parado; fechar e consultar sempre funcionam. Teto de 0,05 por ordem; o KILL bloqueia

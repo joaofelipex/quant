@@ -12,6 +12,8 @@ import logging
 import time
 from concurrent.futures import ThreadPoolExecutor
 
+import pandas as pd
+
 from .runner import RETRY_DELAY_S, Runner
 
 log = logging.getLogger("quant.live")
@@ -28,13 +30,16 @@ class MultiRunner:
         self.last: dict[str, str] = {}           # ultimo resultado de cada ativo
 
     def total_pnl(self) -> float:
-        return sum(float(r.risk.state().get("pnl") or 0.0) for r in self.runners.values())
+        """PnL do dia somado (so conta o dia atual: o que ficou de ontem ja virou)."""
+        today = pd.Timestamp(self.clock(), unit="s")
+        return sum(r.risk.pnl_today(today) for r in self.runners.values())
 
     def _check_total(self) -> None:
         if self.max_total_loss is not None and self.total_pnl() <= -self.max_total_loss:
             fresh = [r for r in self.runners.values() if not r.risk.halted]
             for r in fresh:
-                r.risk.halt(f"perda total do dia {self.total_pnl():.2f} atingiu o limite {self.max_total_loss:.2f}")
+                r.risk.halt(f"perda total do dia {self.total_pnl():.2f} atingiu o limite {self.max_total_loss:.2f}",
+                            daily=True)
             if fresh:
                 log.error("limite de perda TOTAL atingido: entradas de todos os ativos travadas")
 

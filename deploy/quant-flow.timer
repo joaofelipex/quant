@@ -1,0 +1,10 @@
+[Unit]
+Description=quant leitura de fluxo: uma foto do livro por minuto
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=60s
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target

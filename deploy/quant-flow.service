@@ -1,0 +1,20 @@
+[Unit]
+Description=quant leitura de fluxo: foto do livro de ofertas da Kalshi (so leitura publica, sem chave)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=quant
+WorkingDirectory=/opt/quant
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=QUANT_FLOW_DIR=/var/lib/quant/flow
+# ativos fotografados: os do runner (QUANT_ASSETS do runtime.env); sem isso, o catalogo inteiro
+EnvironmentFile=-/var/lib/quant/runtime.env
+ExecStart=/opt/quant/.venv/bin/python -m quant.flow record
+TimeoutStartSec=55
+StateDirectory=quant
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/quant

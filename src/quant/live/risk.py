@@ -19,6 +19,7 @@ class RiskManager:
         self.limits = limits
         self.halted = False
         self.halt_reason = ""
+        self.halt_daily = False  # trava por perda do DIA: some na virada do dia UTC (as outras exigem decisao humana)
         self._day = None
         self._pnl = 0.0
         self._trades = 0
@@ -26,16 +27,22 @@ class RiskManager:
     def _roll(self, ts: pd.Timestamp) -> None:
         if self._day != ts.date():
             self._day, self._pnl, self._trades = ts.date(), 0.0, 0
+            if self.halted and self.halt_daily:  # dia novo, limite novo
+                self.halted, self.halt_reason, self.halt_daily = False, "", False
 
-    def halt(self, reason: str) -> None:
-        self.halted, self.halt_reason = True, reason
+    def pnl_today(self, ts: pd.Timestamp) -> float:
+        """PnL do dia de ``ts``: o guardado so vale se for do mesmo dia (o resto ja virou)."""
+        return self._pnl if self._day == ts.date() else 0.0
+
+    def halt(self, reason: str, *, daily: bool = False) -> None:
+        self.halted, self.halt_reason, self.halt_daily = True, reason, daily
 
     def record_trade(self, pnl: float, ts: pd.Timestamp) -> None:
         self._roll(ts)
         self._pnl += pnl
         self._trades += 1
         if self._pnl <= -self.limits.max_daily_loss:
-            self.halt(f"perda diaria {self._pnl:.2f} atingiu o limite {self.limits.max_daily_loss:.2f}")
+            self.halt(f"perda diaria {self._pnl:.2f} atingiu o limite {self.limits.max_daily_loss:.2f}", daily=True)
 
     def check_entry(self, qty: float, now: pd.Timestamp, bar_close: pd.Timestamp):
         """Devolve (ok, motivo). ``bar_close`` = instante em que a ultima barra fechada terminou."""
@@ -52,10 +59,12 @@ class RiskManager:
 
     def state(self) -> dict:
         return {"day": str(self._day), "pnl": self._pnl, "trades": self._trades,
-                "halted": self.halted, "reason": self.halt_reason}
+                "halted": self.halted, "reason": self.halt_reason, "halt_daily": self.halt_daily}
 
     def load(self, s: dict) -> None:
         day = s.get("day")
         self._day = pd.Timestamp(day).date() if day not in (None, "None") else None
         self._pnl, self._trades = s.get("pnl", 0.0), s.get("trades", 0)
         self.halted, self.halt_reason = s.get("halted", False), s.get("reason", "")
+        # estados antigos nao tinham o campo: trava por perda e do dia
+        self.halt_daily = bool(s.get("halt_daily", self.halted and self.halt_reason.startswith("perda ")))

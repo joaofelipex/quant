@@ -134,6 +134,17 @@ const LABEL: Record<Key, string> = {
       }
     </div>
 
+    <section class="card mt">
+      <div class="spread">
+        <div>
+          <h2>Destravar a gestão de risco</h2>
+          <p class="note">A trava por perda do dia some sozinha na virada do dia (UTC). Aqui você a remove na hora: zera a trava e o PnL
+            do dia de todos os ativos e religa o runner. Posições abertas e stops não são tocados.</p>
+        </div>
+        <button class="btn" [disabled]="!auth.isAdmin() || busy() || killed()" (click)="resetRisk()"><app-icon name="undo" [size]="16" /> Destravar risco</button>
+      </div>
+    </section>
+
     <section class="card danger-zone mt">
       <div class="spread">
         <div>
@@ -238,6 +249,17 @@ export class OperatePage {
                             () => { this.busy.set(false); this.load(); this.store.refresh(); }),
       error: e => { this.toast.error(`Falhou: ${errMsg(e)}`); this.busy.set(false); },
     });
+  }
+
+  protected async resetRisk(): Promise<void> {
+    const ok = await this.confirmSvc.ask({
+      title: 'Destravar a gestão de risco?', confirmLabel: 'Destravar', danger: true,
+      body: 'Para o runner, zera a trava e o PnL do dia de todos os ativos e religa. Os limites de perda voltam a contar do zero agora.',
+    });
+    if (!ok) return;
+    this.busy.set(true);
+    runAction(this.toast, this.api.resetRisk(), r => `Risco destravado em ${r.reset ?? 0} ativo(s)${r.religado ? ' e runner religado' : ''}`,
+              () => { this.busy.set(false); this.store.refresh(); });
   }
 
   protected async kill(): Promise<void> {

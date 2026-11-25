@@ -75,7 +75,9 @@ export interface SettingsResponse {
   options: Record<string, string[]>;
 }
 
-export interface ActionResult { ok?: boolean; erro?: string; canais?: string[]; restart_needed?: boolean }
+export interface ActionResult {
+  ok?: boolean; erro?: string; canais?: string[]; restart_needed?: boolean; reset?: number; religado?: boolean;
+}
 
 /** Posicao na corretora, vista pela boleta manual (quant/manual.py). */
 export interface OrderPosition {

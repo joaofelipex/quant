@@ -45,6 +45,7 @@ class FakeRunner:
         self.kill_file = kill_file or Path("/nao/existe/KILL")
         self.risk = RiskManager(RiskLimits(max_qty=1e9, max_daily_loss=1e9))
         self.risk._pnl = pnl
+        self.risk._day = pd.Timestamp(1_000_000, unit="s").date()  # o dia do relogio falso (Clock)
 
     def step(self):
         self.calls += 1
@@ -544,3 +545,106 @@ class TestSoLong:
         env = {**TestBuildMulti.ENV, "QUANT_DIRECTION": "long"}
         assert all(r.long_only for r in config.build_multi(env.get).runners.values())
         assert not any(r.long_only for r in config.build_multi(TestBuildMulti.ENV.get).runners.values())
+
+
+class TestTravaDiaria:
+    """Trava por perda do dia some na virada do dia UTC; as demais (kill, orfa, gap) ficam ate decisao humana."""
+
+    D1, D2 = pd.Timestamp("2026-11-24 12:00"), pd.Timestamp("2026-11-25 00:01")
+
+    def risk(self):
+        return RiskManager(RiskLimits(max_qty=1e9, max_daily_loss=1.0))
+
+    def test_perda_diaria_trava_e_destrava_no_dia_seguinte(self):
+        r = self.risk()
+        r.record_trade(-2.0, self.D1)
+        assert r.halted and r.halt_daily
+        assert r.check_entry(0.1, self.D1, self.D1)[0] is False
+        ok, why = r.check_entry(0.1, self.D2, self.D2)
+        assert ok and not r.halted and r.pnl_today(self.D2) == 0.0, why
+
+    def test_trava_que_nao_e_de_perda_continua_no_dia_seguinte(self):
+        r = self.risk()
+        r.halt("posicao orfa na partida")
+        r.record_trade(0.0, self.D1)
+        assert not r.check_entry(0.1, self.D2, self.D2)[0] and r.halted
+
+    def test_estado_antigo_com_perda_conta_como_diaria(self):
+        r = self.risk()
+        r.load({"day": "2026-11-24", "pnl": -70.0, "trades": 1, "halted": True,
+                "reason": "perda total do dia -66.33 atingiu"})
+        assert r.halt_daily and r.check_entry(0.1, self.D2, self.D2)[0]
+        r2 = self.risk()
+        r2.load({"day": "2026-11-24", "halted": True, "reason": "kill-switch"})
+        assert not r2.halt_daily
+
+    def test_pnl_de_ontem_nao_conta_no_total_de_hoje(self):
+        a = FakeRunner(pnl=-60.0)
+        a.risk._day = pd.Timestamp("1970-01-11").date()  # ontem em relacao ao relogio falso
+        m = MultiRunner({"A": a}, max_total_loss=5.0, clock=Clock())
+        assert m.total_pnl() == 0.0
+        m.step_due()
+        assert not a.risk.halted
+
+    def test_estado_guarda_o_tipo_de_trava(self):
+        r = self.risk()
+        r.record_trade(-2.0, self.D1)
+        assert r.state()["halt_daily"] is True
+
+
+class TestDestravarRisco:
+    def run_fake(self, active=True, stop_rc=0, start_rc=0):
+        calls = []
+
+        def run(cmd):
+            calls.append(cmd)
+            if cmd[1] == "is-active":
+                return SimpleNamespace(returncode=0, stdout="active\n" if active else "inactive\n", stderr="")
+            rc = stop_rc if cmd[1] == "stop" else start_rc
+            return SimpleNamespace(returncode=rc, stdout="", stderr="falhou" if rc else "")
+
+        run.calls = calls
+        return run
+
+    def write(self, tmp_path, name, halted=True, pnl=-5.0, entry=None, trades=3):
+        (tmp_path / name).write_text(json.dumps({
+            "last_bar": "2026-11-25 01:00:00", "stop": 9.0, "entry": entry,
+            "risk": {"day": "2026-11-25", "pnl": pnl, "trades": trades, "halted": halted,
+                     "reason": "perda total do dia" if halted else ""}}))
+
+    def test_zera_trava_e_pnl_sem_tocar_em_posicao_e_stop(self, tmp_path):
+        ent = {"side": 1, "qty": 0.5, "price": 10.0}
+        self.write(tmp_path, "live_state.BTC.json", entry=ent)
+        self.write(tmp_path, "live_state.ETH.json", halted=False, pnl=0.0, trades=0)
+        self.write(tmp_path, "live_state.paper-antigo.json")
+        run = self.run_fake()
+        res = control.reset_risk(tmp_path / "live_state.json", tmp_path / "KILL", run)
+        assert res == {"ok": True, "erro": "", "reset": 1, "religado": True}
+        btc = json.loads((tmp_path / "live_state.BTC.json").read_text())
+        assert btc["risk"]["halted"] is False and btc["risk"]["pnl"] == 0.0 and btc["risk"]["trades"] == 0
+        assert btc["entry"] == ent and btc["stop"] == 9.0  # posicao e stop intactos
+        assert json.loads((tmp_path / "live_state.paper-antigo.json").read_text())["risk"]["halted"] is True
+        assert [c[1] for c in run.calls] == ["is-active", "stop", "start"]  # edita com o runner PARADO
+
+    def test_runner_parado_continua_parado(self, tmp_path):
+        self.write(tmp_path, "live_state.BTC.json")
+        run = self.run_fake(active=False)
+        res = control.reset_risk(tmp_path / "live_state.json", tmp_path / "KILL", run)
+        assert res["ok"] and res["religado"] is False and [c[1] for c in run.calls] == ["is-active"]
+
+    def test_recusa_com_kill(self, tmp_path):
+        self.write(tmp_path, "live_state.BTC.json")
+        (tmp_path / "KILL").write_text("")
+        res = control.reset_risk(tmp_path / "live_state.json", tmp_path / "KILL", self.run_fake())
+        assert not res["ok"] and "KILL" in res["erro"]
+        assert json.loads((tmp_path / "live_state.BTC.json").read_text())["risk"]["halted"] is True
+
+    def test_falha_ao_parar_nao_edita_nada(self, tmp_path):
+        self.write(tmp_path, "live_state.BTC.json")
+        res = control.reset_risk(tmp_path / "live_state.json", tmp_path / "KILL", self.run_fake(stop_rc=1))
+        assert not res["ok"] and json.loads((tmp_path / "live_state.BTC.json").read_text())["risk"]["halted"] is True
+
+    def test_so_admin_pode(self):
+        from quant import accounts
+
+        assert accounts.required_role("POST", "/api/risk/reset") == "admin"
