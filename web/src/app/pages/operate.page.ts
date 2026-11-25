@@ -12,12 +12,12 @@ import { PageHead } from '../shared/page-head';
 import { ToastService } from '../shared/toast';
 
 export const SETTING_KEYS = ['QUANT_MODE', 'QUANT_VENUE', 'QUANT_TIMEFRAME', 'QUANT_QTY', 'QUANT_MAX_DAILY_LOSS',
-                             'QUANT_STOP_ATR', 'QUANT_ASSETS', 'QUANT_NOTIONAL', 'QUANT_MAX_TOTAL_LOSS'] as const;
+                             'QUANT_STOP_ATR', 'QUANT_ASSETS', 'QUANT_NOTIONAL', 'QUANT_MAX_TOTAL_LOSS', 'QUANT_DIRECTION'] as const;
 type Key = (typeof SETTING_KEYS)[number];
 
 const LABEL: Record<Key, string> = {
   QUANT_MODE: 'modo', QUANT_VENUE: 'corretora', QUANT_TIMEFRAME: 'timeframe', QUANT_QTY: 'quantidade',
-  QUANT_MAX_DAILY_LOSS: 'perda máxima/dia', QUANT_STOP_ATR: 'stop (× ATR)', QUANT_ASSETS: 'ativos',
+  QUANT_MAX_DAILY_LOSS: 'perda máxima/dia', QUANT_STOP_ATR: 'stop (× ATR)', QUANT_ASSETS: 'ativos', QUANT_DIRECTION: 'direção',
   QUANT_NOTIONAL: 'valor por entrada (USD)', QUANT_MAX_TOTAL_LOSS: 'perda máxima total/dia',
 };
 
@@ -70,6 +70,11 @@ const LABEL: Record<Key, string> = {
         <label class="field"><span>Perda máxima por dia</span>
           <input inputmode="decimal" [ngModel]="form()['QUANT_MAX_DAILY_LOSS']" (ngModelChange)="set('QUANT_MAX_DAILY_LOSS', $event)">
           <span class="hint">na moeda da conta; ao passar, o risco trava</span></label>
+        <label class="field"><span>Direção</span>
+          <select [ngModel]="form()['QUANT_DIRECTION'] || 'both'" (ngModelChange)="set('QUANT_DIRECTION', $event)">
+            <option value="both">comprado e vendido (long e short)</option>
+            <option value="long">só comprado (long)</option>
+          </select><span class="hint">"só comprado" nunca abre short; o sinal de venda só fecha uma compra aberta</span></label>
         <label class="field"><span>Stop (× ATR)</span>
           <input inputmode="decimal" [ngModel]="form()['QUANT_STOP_ATR']" (ngModelChange)="set('QUANT_STOP_ATR', $event)">
           <span class="hint">distância do stop em múltiplos do ATR</span></label>

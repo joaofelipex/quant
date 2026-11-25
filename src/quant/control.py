@@ -25,7 +25,8 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 SERVICE = "quant-live"
 ENV_WHITELIST = ("QUANT_MODE", "QUANT_VENUE", "QUANT_SYMBOL", "QUANT_TIMEFRAME", "QUANT_QTY", "QUANT_MAX_DAILY_LOSS",
-                 "QUANT_STOP_ATR", "QUANT_TESTNET_KIND", "QUANT_ASSETS", "QUANT_NOTIONAL", "QUANT_MAX_TOTAL_LOSS")
+                 "QUANT_STOP_ATR", "QUANT_TESTNET_KIND", "QUANT_ASSETS", "QUANT_NOTIONAL", "QUANT_MAX_TOTAL_LOSS",
+                 "QUANT_DIRECTION")
 RUNTIME_ENV = Path("/var/lib/quant/runtime.env")
 VERBS = ("start", "stop", "restart")
 
@@ -71,6 +72,7 @@ SETTINGS = {
     "QUANT_QTY": _num(0, 1.0),
     "QUANT_MAX_DAILY_LOSS": _num(0, 1000),
     "QUANT_STOP_ATR": _num(0, 10),
+    "QUANT_DIRECTION": _enum("both", "long"),
     "QUANT_ASSETS": _assets,
     "QUANT_NOTIONAL": _num(0, 1000),
     "QUANT_MAX_TOTAL_LOSS": _num(0, 100000),
@@ -542,7 +544,8 @@ def make_handler(state_path: Path, kill_file: Path, runtime_path: Path = RUNTIME
             elif path == "/api/settings":
                 self._json(200, {"saved": read_runtime(runtime_path), "effective": runner_config(),
                                  "options": {"QUANT_MODE": ["paper", "testnet"], "QUANT_VENUE": ["binance", "kalshi"],
-                                             "QUANT_TIMEFRAME": ["1m", "5m", "15m", "1h"]}})
+                                             "QUANT_TIMEFRAME": ["1m", "5m", "15m", "1h"],
+                                             "QUANT_DIRECTION": ["both", "long"]}})
             else:
                 self._json(404, {"erro": "nao encontrado"})
 

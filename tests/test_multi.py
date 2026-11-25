@@ -197,6 +197,12 @@ class TestStatusPorAtivo:
 
 
 class TestConfiguracoes:
+    def test_direcao_so_long_ou_ambos(self, tmp_path):
+        p = tmp_path / "rt.env"
+        assert control.write_runtime(p, {"QUANT_DIRECTION": "long"})["QUANT_DIRECTION"] == "long"
+        with pytest.raises(control.SettingError):
+            control.write_runtime(p, {"QUANT_DIRECTION": "short"})
+
     def test_quant_assets_normaliza_e_valida(self, tmp_path):
         p = tmp_path / "rt.env"
         saved = control.write_runtime(p, {"QUANT_ASSETS": "btc, eth", "QUANT_NOTIONAL": "30"})
@@ -491,3 +497,50 @@ class TestDadosRuins:
         with pytest.raises(Exception, match="sem fill"):
             ex.market_order(1, 0.002, 1675.0)
         assert float(enviadas[0]["price"]) == pytest.approx(1.68 * 1.01, abs=0.0002)
+
+
+class TestSoLong:
+    """QUANT_DIRECTION=long: nunca abre short, mas o sinal de venda ainda fecha uma compra aberta."""
+
+    def runner(self, sinal, long_only, pos=None):
+        bars = pd.DataFrame({"datetime": pd.date_range("2026-01-01", periods=5, freq="1min"),
+                             "open": 50.0, "high": 51.0, "low": 49.0, "close": 50.0})
+
+        class Feed:
+            def closed_bars(self, n):
+                return bars
+
+        ex = PaperExecutor()
+        r = Runner(Feed(), ex, RiskManager(RiskLimits(max_qty=1e9, max_daily_loss=1e9)),
+                   lambda b: b.assign(signal=sinal, atr=1.0), qty=1.0, timeframe="1m", state_path="/nao/grava.json",
+                   long_only=long_only)
+        r._save = lambda: None
+        r.now_fn = lambda: pd.Timestamp("2026-01-01 00:05:10")
+        if pos is not None:
+            ex.market_order(pos, 1.0, 50.0)
+            r.entry, r.stop, r.stop_dist = {"side": pos, "qty": 1.0, "price": 50.0}, 50.0 - pos * 2.0, 2.0
+        return r, ex
+
+    def test_com_long_only_o_sinal_de_venda_nao_abre_short(self):
+        r, ex = self.runner(-1, True)
+        assert r.step() == "ok" and ex.position() is None
+
+    def test_sem_long_only_o_short_abre(self):
+        r, ex = self.runner(-1, False)
+        assert r.step() == "entrada" and ex.position().side == -1
+
+    def test_long_only_ainda_abre_long(self):
+        r, ex = self.runner(1, True)
+        assert r.step() == "entrada" and ex.position().side == 1
+
+    def test_sinal_de_venda_fecha_a_compra_aberta_mas_nao_vira_short(self):
+        r, ex = self.runner(-1, True, pos=1)
+        assert r.step() == "saida_sinal" and ex.position() is None
+
+    def test_configuracao_pelo_ambiente(self, monkeypatch):
+        monkeypatch.setattr(config, "build_kalshi", lambda mode, env, ticker=None: FakeKalshiEx())
+        monkeypatch.setattr(config, "build_feed", lambda *a, **k: FakeFeed())
+        monkeypatch.setattr(config, "KalshiFeed", lambda *a, **k: FakeFeed())
+        env = {**TestBuildMulti.ENV, "QUANT_DIRECTION": "long"}
+        assert all(r.long_only for r in config.build_multi(env.get).runners.values())
+        assert not any(r.long_only for r in config.build_multi(TestBuildMulti.ENV.get).runners.values())

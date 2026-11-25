@@ -49,9 +49,10 @@ class Runner:
                  timeframe: str = "5m", stop_atr: float = 2.0, warmup: int = 300,
                  state_path: str | Path = "live_state.json", kill_file: str | Path = "KILL",
                  now_fn: Callable[[], pd.Timestamp] = _utc_now, trades_path: str | Path | None = None,
-                 label: str = "", notional: float | None = None):
+                 label: str = "", notional: float | None = None, long_only: bool = False):
         self.feed, self.executor, self.risk, self.signals = feed, executor, risk, signals
         self.qty, self.stop_atr, self.warmup = qty, stop_atr, warmup
+        self.long_only = long_only  # so ABRE comprado; o sinal de venda continua fechando uma compra aberta
         self.notional = notional  # se informado, cada entrada vale ~este valor (USD) e ``qty`` e ignorada
         self.bar_s = TIMEFRAME_SECONDS[timeframe]
         self.state_path, self.kill_file, self.now_fn = Path(state_path), Path(kill_file), now_fn
@@ -211,11 +212,12 @@ class Runner:
             self._close(float(last["close"]), now, "sinal oposto")
             pos, result = None, "saida_sinal"
         atr_ok = float(row["atr"]) > 0  # mercado parado (atr 0/NaN) daria stop colado na entrada
-        if pos is None and sig != 0 and result == "ok" and atr_ok:
+        entry_sig = 0 if (self.long_only and sig < 0) else sig
+        if pos is None and entry_sig != 0 and result == "ok" and atr_ok:
             ok, why = self.risk.check_entry(self._size(float(last["close"])), now, bar_close)
             if ok:
                 try:
-                    protected = self._enter(sig, float(last["close"]), float(row["atr"]), now)
+                    protected = self._enter(entry_sig, float(last["close"]), float(row["atr"]), now)
                     result = "entrada" if protected else "sem_protecao"
                 except InsufficientFunds as e:  # sem margem: pula esta barra (repetir a cada 5 s so martela a API)
                     log.warning("entrada pulada: %s", e)

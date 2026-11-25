@@ -87,6 +87,7 @@ def build_runner() -> Runner:
     feed = build_feed(mode, symbol, tfm, kind, env("QUANT_FEED", "auto"), venue)
     return Runner(feed, executor, risk, signals, qty=qty,
                   timeframe=tfm, stop_atr=float(env("QUANT_STOP_ATR", "2.0")),
+                  long_only=env("QUANT_DIRECTION", "both") == "long",
                   state_path=env("QUANT_STATE", "live_state.json"), kill_file=env("QUANT_KILL_FILE", "KILL"),
                   trades_path=env("QUANT_TRADES_LOG") or None, label=f"{venue}/{mode}")
 
@@ -122,7 +123,9 @@ def build_multi(env=os.environ.get) -> MultiRunner:
             loss = float(env("QUANT_MAX_DAILY_LOSS", "20"))
             risk = RiskManager(RiskLimits(max_qty=float("inf"), max_daily_loss=loss))
             return Runner(feed, ex, risk, signals, qty=0.0, notional=notional, timeframe=tfm,
-                          stop_atr=float(env("QUANT_STOP_ATR", "2.0")), state_path=state_dir / f"live_state.{a}.json",
+                          stop_atr=float(env("QUANT_STOP_ATR", "2.0")),
+                          long_only=env("QUANT_DIRECTION", "both") == "long",
+                          state_path=state_dir / f"live_state.{a}.json",
                           kill_file=kill, trades_path=trades, label=f"{venue}/{mode}:{a}")
         except Exception:  # noqa: BLE001 - um mercado fora do ar nao pode impedir os outros de subirem
             log.exception("nao consegui preparar %s; seguindo sem ele", a)
