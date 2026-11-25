@@ -26,6 +26,7 @@ export class App {
     { to: '/', label: 'Visão geral', short: 'Geral', icon: 'grid', exact: true },
     { to: '/operar', label: 'Operar', short: 'Operar', icon: 'sliders', exact: false },
     { to: '/boleta', label: 'Boleta', short: 'Boleta', icon: 'ticket', exact: false },
+    { to: '/ia', label: 'IA', short: 'IA', icon: 'cpu', exact: false },
     { to: '/trades', label: 'Trades', short: 'Trades', icon: 'bars', exact: false },
     { to: '/carteira', label: 'Carteira', short: 'Carteira', icon: 'pie', exact: false },
     { to: '/saude', label: 'Saúde', short: 'Saúde', icon: 'pulse', exact: false },

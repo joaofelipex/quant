@@ -11,7 +11,7 @@ polkit.addRule(function (action, subject) {
         return polkit.Result.YES;
     }
     if (["quant-selfcheck.service", "quant-alert.service", "quant-deploy.service", "quant-rollback.service",
-         "quant-order.service"]
+         "quant-order.service", "quant-agent-agora.service"]
             .indexOf(unit) !== -1 && verb === "start") {
         return polkit.Result.YES;
     }

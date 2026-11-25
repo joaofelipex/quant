@@ -11,6 +11,7 @@ export const routes: Routes = [
   { path: 'boleta', title: 'quant · boleta', loadComponent: () => import('./pages/ticket.page').then(m => m.TicketPage) },
   { path: 'conta', title: 'quant · minha conta', loadComponent: () => import('./pages/account.page').then(m => m.AccountPage) },
   { path: 'usuarios', title: 'quant · usuários', canActivate: [adminOnly], loadComponent: () => import('./pages/users.page').then(m => m.UsersPage) },
+  { path: 'ia', title: 'quant · ia', loadComponent: () => import('./pages/agent.page').then(m => m.AgentPage) },
   { path: 'trades', title: 'quant · trades', loadComponent: () => import('./pages/trades.page').then(m => m.TradesPage) },
   { path: 'carteira', title: 'quant · carteira', loadComponent: () => import('./pages/portfolio.page').then(m => m.PortfolioPage) },
   { path: 'saude', title: 'quant · saúde', loadComponent: () => import('./pages/health.page').then(m => m.HealthPage) },

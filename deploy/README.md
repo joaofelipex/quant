@@ -184,6 +184,18 @@ dia chega nele; o kill-switch fecha todos em ~1 s. Tamanho por valor: `QUANT_NOT
 inteiros de cada ativo; ativos cujo menor contrato passa de 1,5 x esse valor ficam de fora (com aviso no log). A Visão geral mostra a
 tabela de ativos (com filtro); a Boleta pede ativo + valor em USD. Sem `QUANT_ASSETS` tudo funciona como antes (um ativo, `QUANT_QTY`).
 
+**Agente de IA (aba IA):** um agente (Claude, via API da Anthropic) que decide e opera sozinho **só na Kalshi demo**. A cada ciclo
+(padrão 10 min) ele recebe só números do sistema (livro de ofertas do universo, retornos e volatilidade dos candidatos, posições, PnL do dia,
+limites), responde pela ferramenta `decide` e o **código** valida cada ação antes de executar: valor máximo por entrada, posições abertas,
+perda máxima do dia (ao atingir, para de abrir e se desliga), stop obrigatório numa faixa, cooldown por ativo, só comprado (padrão),
+kill-switch, só `testnet`, e nunca um ativo que o runner esteja operando. Executa pela mesma rota da Boleta; se uma posição abrir sem
+stop, fecha na hora; posição acima do tempo máximo é fechada por regra. Tudo fica em `/var/lib/quant/agent/decisions.jsonl` (e na tela IA).
+Ligar/desligar: operador; limites, modelo e universo: admin. A chave da API fica em `/etc/quant/agent.env` (você grava, o painel nunca lê):
+`sudo bash /opt/quant/deploy/definir-chave-ia.sh`. Instalação:
+`sudo cp deploy/quant-agent.service deploy/quant-agent-agora.service deploy/quant-agent.timer /etc/systemd/system/ && sudo cp deploy/50-quant-control.rules /etc/polkit-1/rules.d/ && sudo systemctl daemon-reload && sudo systemctl enable --now quant-agent.timer`.
+Custo: 1 chamada ao modelo por ciclo (aba IA mostra os tokens). Um agente de IA operando **não é prova de vantagem estatística**: acompanhe o PnL
+dele contra o do runner e o estudo de fluxo antes de dar mais autonomia.
+
 **Leitura de fluxo (gravador + estudo):** a estratégia hoje olha só o preço (velas). O livro de ofertas da Kalshi só existe "agora" (sem
 histórico), então para saber se o desequilíbrio compra/venda ajuda a entrar, é preciso **gravar e medir**. O `quant-flow.timer` tira uma
 foto por minuto dos ativos do runner (desequilíbrio em 0,25% e 1% do preço, topo do livro, spread; só leitura pública, sem chave) em

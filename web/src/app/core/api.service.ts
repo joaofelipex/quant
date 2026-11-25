@@ -1,7 +1,7 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
-import { ActionResult, OrderRequest, OrderResult, SettingsResponse, Status, TradesSummary } from './models';
+import { ActionResult, AgentStatus, OrderRequest, OrderResult, SettingsResponse, Status, TradesSummary } from './models';
 
 /** Cabecalho exigido pelo backend em todo POST (barra CSRF: so JS da mesma origem consegue enviá-lo). */
 export const CONTROL_HEADERS = { 'X-Quant-Control': '1' };
@@ -26,6 +26,10 @@ export class ApiService {
   /** Pede uma ordem manual (so demo); devolve o id. O resultado sai de `orderResult()` quando a unit terminar. */
   order(req: OrderRequest): Observable<ActionResult & { id?: string }> { return this.post('api/order', req); }
   orderResult(): Observable<OrderResult> { return this.http.get<OrderResult>('api/order'); }
+  agent(): Observable<AgentStatus> { return this.http.get<AgentStatus>('api/agent'); }
+  agentToggle(enabled: boolean) { return this.post('api/agent/toggle', { enabled }); }
+  agentConfig(values: Record<string, unknown>) { return this.post('api/agent/config', values); }
+  agentRun() { return this.post('api/agent/run'); }
   kill() { return this.post('api/kill'); }
   resetRisk() { return this.post('api/risk/reset'); }
   runSelfcheck() { return this.post('api/selfcheck/run'); }

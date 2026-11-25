@@ -1,0 +1,10 @@
+[Unit]
+Description=quant agente de IA: confere a cada minuto se e hora de um ciclo (intervalo e liga/desliga na configuracao)
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=60s
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target

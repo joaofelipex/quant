@@ -134,6 +134,18 @@ def reset_risk(state_path: Path, kill_file: Path, run=None) -> dict:
     return {"ok": not started, "erro": started, "reset": changed, "religado": was_active and not started}
 
 
+def agent_status(directory: Path, key_file: Path = Path("/etc/quant/agent.env")) -> dict:
+    """Estado do agente de IA para o painel: configuracao, ultimo ciclo, decisoes recentes e posicoes do livro dele."""
+    from . import agent
+
+    cfg = agent.load_config(directory / "config.json")
+    state = agent.read_state(directory)
+    pnl, _ = agent.trades_of_agent(Path(os.environ.get("QUANT_TRADES_LOG", "trades.csv")), time.time())
+    return {"config": cfg, "state": state, "chave": key_file.exists(), "modelos": list(agent.MODELS),
+            "pnl_hoje": round(pnl, 4), "livro": agent.read_book(directory),
+            "decisoes": agent.read_decisions(directory / "decisions.jsonl", 30)}
+
+
 ORDER_REQUEST = Path("/var/lib/quant/order-request.json")
 ORDER_RESULT = Path("/var/lib/quant/order-result.json")
 ORDER_UNIT = "quant-order.service"
@@ -568,6 +580,9 @@ def make_handler(state_path: Path, kill_file: Path, runtime_path: Path = RUNTIME
                 except OSError:
                     body = b""
                 self._send(200, body, "text/csv; charset=utf-8")
+            elif path == "/api/agent":
+                self._json(200, agent_status(Path(os.environ.get("QUANT_AGENT_DIR", "/var/lib/quant/agent")),
+                                             Path(os.environ.get("QUANT_AGENT_ENV", "/etc/quant/agent.env"))))
             elif path == "/api/markets":
                 from .live import assets as assets_mod
 
@@ -620,6 +635,8 @@ def make_handler(state_path: Path, kill_file: Path, runtime_path: Path = RUNTIME
                 code, res = submit_order(body, Path(os.environ.get("QUANT_ORDER_REQUEST", str(ORDER_REQUEST))),
                                          Path(os.environ.get("QUANT_ORDER_RESULT", str(ORDER_RESULT))), run)
                 return self._json(code, res)
+            if path.startswith("/api/agent/"):
+                return self._agent_post(path, body, sess)
             if path == "/api/risk/reset":
                 res = reset_risk(state_path, kill_file, run)
                 return self._json(200 if res["ok"] else 409, res)
@@ -635,6 +652,30 @@ def make_handler(state_path: Path, kill_file: Path, runtime_path: Path = RUNTIME
                 except (SettingError, ValueError) as e:
                     return self._json(400, {"erro": str(e)})
             self._json(404, {"erro": "nao encontrado"})
+
+        def _agent_post(self, path: str, body: dict, sess):
+            from . import agent
+
+            directory = Path(os.environ.get("QUANT_AGENT_DIR", "/var/lib/quant/agent"))
+            verb = path.rsplit("/", 1)[1]
+            try:
+                if verb == "toggle":  # ligar/desligar: operador; so a chave enabled
+                    if set(body) != {"enabled"}:
+                        raise agent.ConfigError("toggle aceita so 'enabled'")
+                    return self._json(200, {"ok": True, "config": agent.save_config(directory / "config.json", body)})
+                if verb == "config":  # limites, modelo, universo: so admin
+                    if sess is not None and sess.get("role") != "admin":
+                        return self._json(403, {"ok": False, "erro": "so administrador muda os limites do agente"})
+                    return self._json(200, {"ok": True, "config": agent.save_config(directory / "config.json", body)})
+                if verb == "run":  # roda um ciclo agora (ignora o intervalo)
+                    run_ = run or (lambda cmd: subprocess.run(cmd, capture_output=True, text=True, timeout=30))
+                    r = run_(["systemctl", "start", "--no-block", "quant-agent-agora.service"])
+                    ok = r.returncode == 0
+                    err = "" if ok else (r.stderr or "").strip()[:300]
+                    return self._json(200 if ok else 409, {"ok": ok, "erro": err})
+            except agent.ConfigError as e:
+                return self._json(400, {"ok": False, "erro": str(e)})
+            return self._json(404, {"ok": False, "erro": "nao encontrado"})
 
         @staticmethod
         def _summary(path: str, body: dict) -> str:

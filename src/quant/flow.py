@@ -86,11 +86,16 @@ def snapshot_one(asset: str, fetch=get_json) -> dict | None:
     return None if f is None else {"asset": asset, **f}
 
 
-def record(names: list[str], out_dir: Path = FLOW_DIR, *, fetch=get_json, now=time.time, workers: int = 12) -> int:
-    """Uma rodada: foto de cada ativo em paralelo, acrescentada ao CSV do dia. Devolve quantas linhas gravou."""
-    ts = int(now())
+def snapshot_many(names: list[str], fetch=get_json, workers: int = 12) -> list[dict]:
+    """Foto do livro de cada ativo, em paralelo. Quem falha ou tem livro inutil fica de fora."""
+    if not names:
+        return []
     with ThreadPoolExecutor(max_workers=max(1, min(workers, len(names)))) as pool:
-        rows = [r for r in pool.map(lambda a: snapshot_one(a, fetch), names) if r]
+        return [r for r in pool.map(lambda a: snapshot_one(a, fetch), names) if r]
+
+
+def write_rows(rows: list[dict], out_dir: Path, ts: int) -> int:
+    """Acrescenta as fotos ao CSV do dia (UTC), com cabecalho se for novo. Devolve quantas linhas gravou."""
     if not rows:
         return 0
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -103,6 +108,12 @@ def record(names: list[str], out_dir: Path = FLOW_DIR, *, fetch=get_json, now=ti
         for r in rows:
             w.writerow({"ts": ts, **{k: (round(v, 6) if isinstance(v, float) else v) for k, v in r.items()}})
     return len(rows)
+
+
+def record(names: list[str], out_dir: Path = FLOW_DIR, *, fetch=get_json, now=time.time, workers: int = 12) -> int:
+    """Uma rodada: foto de cada ativo em paralelo, acrescentada ao CSV do dia. Devolve quantas linhas gravou."""
+    ts = int(now())
+    return write_rows(snapshot_many(names, fetch, workers), out_dir, ts)
 
 
 # ---- estudo ---------------------------------------------------------------------------------------------------------

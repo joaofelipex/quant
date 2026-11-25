@@ -1,0 +1,28 @@
+[Unit]
+Description=quant agente de IA: ciclo agora (botao do painel; ignora o intervalo)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=quant
+WorkingDirectory=/opt/quant
+# chave da corretora (demo) e a chave da IA: ambas gravadas por voce na VM; o painel web nao le nenhuma
+EnvironmentFile=/etc/quant-live.env
+EnvironmentFile=-/etc/quant/agent.env
+EnvironmentFile=-/var/lib/quant/runtime.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=QUANT_STATE=/var/lib/quant/live_state.json
+Environment=QUANT_KILL_FILE=/var/lib/quant/KILL
+Environment=QUANT_TRADES_LOG=/var/lib/quant/trades.csv
+Environment=QUANT_AGENT_DIR=/var/lib/quant/agent
+Environment=QUANT_FLOW_DIR=/var/lib/quant/flow
+# o timer chama a cada minuto; o intervalo real (padrao 10 min) e o ligar/desligar vem da configuracao no painel
+ExecStart=/opt/quant/.venv/bin/python -m quant.agent run --force
+TimeoutStartSec=170
+SuccessExitStatus=1
+StateDirectory=quant
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/quant

@@ -103,7 +103,7 @@ def _record_trade(path: Path | None, side: int, qty: float, entry: float, exit_:
 
 
 def execute(req: dict, ex, *, price_fn, kill_file: Path | None = None, trades_path: Path | None = None,
-            save_basis=None, label: str = "kalshi/testnet") -> dict:
+            save_basis=None, label: str = "kalshi/testnet", why: str = "manual") -> dict:
     """Executa um pedido ja validado. Devolve ``{ok, msg, aviso?, position}``; nunca levanta por regra de negocio."""
     from .live.kalshi import KalshiError, StopRejected
 
@@ -163,7 +163,7 @@ def execute(req: dict, ex, *, price_fn, kill_file: Path | None = None, trades_pa
     if fill is not None:
         pnl = (fill.price - pos.entry) * pos.side * pos.qty - fill.fee
         try:
-            _record_trade(trades_path, pos.side, pos.qty, pos.entry, fill.price, pnl, "manual", label)
+            _record_trade(trades_path, pos.side, pos.qty, pos.entry, fill.price, pnl, why, label)
         except OSError:
             log.exception("nao consegui gravar o historico de trades")
     return {"ok": True, "msg": f"posicao fechada, PnL {pnl:+.4f}", "position": _position_view(ex, price)}

@@ -8,7 +8,8 @@ from __future__ import annotations
 from .auth import RANK, ROLES, Auth, AuthError
 
 # papel minimo por rota; "any" = qualquer logado; None = publica. O que nao esta aqui exige admin (falha fechada).
-_OPERATOR_POST = ("/api/order", "/api/kill", "/api/settings", "/api/selfcheck/run", "/api/alerts/test")
+_OPERATOR_POST = ("/api/order", "/api/agent/toggle", "/api/agent/run", "/api/kill", "/api/settings",
+                  "/api/selfcheck/run", "/api/alerts/test")
 _ANY_POST = ("/api/password", "/api/2fa/start", "/api/2fa/enable", "/api/2fa/disable", "/api/sessions/revoke",
              "/api/sessions/revoke-others")
 _PUBLIC = ("/api/login", "/api/logout", "/api/setup", "/api/session")

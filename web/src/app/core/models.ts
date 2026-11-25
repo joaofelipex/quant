@@ -91,4 +91,23 @@ export interface OrderRequest {
   action: 'status' | 'open' | 'close' | 'stop'; side?: 1 | -1; qty?: number; usd?: number; asset?: string | null; stop_pct?: number | null;
 }
 
+export interface AgentConfig {
+  enabled: boolean; model: string; interval_min: number; max_usd: number; max_positions: number; max_daily_loss: number;
+  long_only: boolean; stop_min: number; stop_max: number; cooldown_min: number; max_actions: number; max_hold_h: number;
+  candidates: number; universe: string;
+}
+export interface AgentAction {
+  acao?: string; ativo?: string; status: string; usd?: number; stop_pct?: number; motivo?: string; why?: string;
+  detalhe?: string; aviso?: string; ajustado?: boolean; fechada_por_seguranca?: boolean;
+}
+export interface AgentDecision {
+  t: number; analise?: string; erro?: string | null; universo?: number; fotos?: number; pnl_dia?: number;
+  uso?: { input_tokens?: number; output_tokens?: number }; acoes: AgentAction[];
+}
+export interface AgentStatus {
+  config: AgentConfig; chave: boolean; modelos: string[]; pnl_hoje: number; decisoes: AgentDecision[];
+  state: { last_run?: number; last_error?: string | null; ciclos?: number; tokens?: number };
+  livro: Record<string, { opened_at: number; reason: string; side: number; usd: number }>;
+}
+
 export type Tone = '' | 'ok' | 'bad' | 'warn';
