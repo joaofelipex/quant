@@ -131,4 +131,26 @@ export interface Metrics {
   problemas: { nivel: 'bad' | 'warn'; texto: string }[];
 }
 
+/** GET api/live: o que a IA e o robo estao lendo agora. */
+export interface LiveCandidate {
+  ativo: string; ret_5m_bps?: number | null; ret_15m_bps?: number | null; ret_60m_bps?: number | null; imb_100?: number; spread_bps?: number;
+  custo_ida_volta_bps?: number; decisao: string | null; status: string | null; porque: string;
+}
+export interface RadarRow {
+  ativo: string; barra: string | null; preco: number | null; falta_alta_pct: number | null; falta_baixa_pct: number | null; er: number | null; er_ok: boolean;
+  tendencia: number | null; sinal: number | null; resultado: string | null; posicao: number | null; travado: boolean; motivo: string; fluxo: number | null;
+}
+export interface Live {
+  em: number; er_min: number; ativos: string[]; robo: RadarRow[];
+  fontes: { nome: string; idade_s: number | null; limite_s: number; detalhe: string }[];
+  ia: null | {
+    t: number; ha_s: number; modelo: string; sombra: boolean; erro: string | null; analise: string; posicoes: string[];
+    funil: { universo: number; fotos: number; candidatos: number; pedidos: number; aceitos: number };
+    candidatos: LiveCandidate[]; historico: { t: number; pedidos: number; aceitos: number }[];
+  };
+}
+/** GET api/flow: [epoch, meio do livro, desequilibrio 1%, spread bps]. */
+export interface FlowSeries { ativo: string; serie: [number, number, number, number][]; decisoes: { t: number; acao?: string; status: string; porque: string }[] }
+export interface Study { nome: string; hipotese: string; resultado: string; status: string; tom: Tone }
+
 export type Tone = '' | 'ok' | 'bad' | 'warn';

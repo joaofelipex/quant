@@ -1,7 +1,7 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
-import { ActionResult, AgentStatus, Metrics, OrderRequest, OrderResult, SettingsResponse, Status, TradesSummary } from './models';
+import { ActionResult, AgentStatus, FlowSeries, Live, Metrics, Study, OrderRequest, OrderResult, SettingsResponse, Status, TradesSummary } from './models';
 
 /** Cabecalho exigido pelo backend em todo POST (barra CSRF: so JS da mesma origem consegue enviá-lo). */
 export const CONTROL_HEADERS = { 'X-Quant-Control': '1' };
@@ -26,6 +26,9 @@ export class ApiService {
   /** Pede uma ordem manual (so demo); devolve o id. O resultado sai de `orderResult()` quando a unit terminar. */
   order(req: OrderRequest): Observable<ActionResult & { id?: string }> { return this.post('api/order', req); }
   orderResult(): Observable<OrderResult> { return this.http.get<OrderResult>('api/order'); }
+  live(): Observable<Live> { return this.http.get<Live>('api/live'); }
+  flow(asset: string, horas: number): Observable<FlowSeries> { return this.http.get<FlowSeries>('api/flow', { params: { asset, horas } }); }
+  research(): Observable<{ estudos: Study[] }> { return this.http.get<{ estudos: Study[] }>('api/research'); }
   metrics(): Observable<Metrics> { return this.http.get<Metrics>('api/metrics'); }
   agent(): Observable<AgentStatus> { return this.http.get<AgentStatus>('api/agent'); }
   agentToggle(enabled: boolean) { return this.post('api/agent/toggle', { enabled }); }

@@ -44,6 +44,18 @@ def _utc_now() -> pd.Timestamp:
     return pd.Timestamp.now(tz="UTC").tz_localize(None)
 
 
+def _view(last, row, result: str) -> dict:
+    """Numeros da ultima barra que o painel mostra; indicador que a estrategia nao calcula fica None."""
+    def num(k: str) -> float | None:
+        v = row.get(k)
+        return None if v is None or pd.isna(v) else float(v)
+
+    fast, slow = num("ema_fast"), num("ema_slow")
+    trend = None if fast is None or slow is None else (1 if fast > slow else -1)
+    return {"close": float(last["close"]), "canal_alta": num("donchian_high"), "canal_baixa": num("donchian_low"),
+            "er": num("er"), "atr": num("atr"), "tendencia": trend, "sinal": int(row["signal"]), "resultado": result}
+
+
 class Runner:
     def __init__(self, feed: Feed, executor: Executor, risk: RiskManager, signals: SignalFn, *, qty: float,
                  timeframe: str = "5m", stop_atr: float = 2.0, warmup: int = 300,
@@ -64,6 +76,7 @@ class Runner:
         self.trades_path = Path(trades_path) if trades_path else None
         self.label = label  # ex.: "kalshi/testnet"; vai em cada linha do historico de trades
         self.last_bar: pd.Timestamp | None = None
+        self.view: dict | None = None  # o que a ultima barra mostrou (so informativo, para o painel)
         self.stop: float | None = None  # preco do stop (software e, se houver, corretora)
         self.stop_dist: float | None = None  # distancia do stop, para recalcular a partir do preco real de entrada
         self.entry: dict | None = None  # entrada CONFIRMADA: side, qty, price
@@ -87,6 +100,7 @@ class Runner:
     def _save(self) -> None:
         s = {"last_bar": str(self.last_bar) if self.last_bar is not None else None, "stop": self.stop,
              "stop_dist": self.stop_dist, "entry": self.entry, "ext": self.ext, "risk": self.risk.state(),
+             "leitura": self.view,
              "executor": self.executor.export_state()}
         tmp = self.state_path.with_suffix(".tmp")
         tmp.write_text(json.dumps(s))
@@ -98,6 +112,7 @@ class Runner:
             self.last_bar = pd.Timestamp(s["last_bar"]) if s.get("last_bar") else None
             self.stop, self.stop_dist, self.entry = s.get("stop"), s.get("stop_dist"), s.get("entry")
             self.ext = s.get("ext")
+            self.view = s.get("leitura")
             self.risk.load(s.get("risk", {}))
             if s.get("executor") is not None:
                 self.executor.import_state(s["executor"])  # paper: a posicao simulada sobrevive ao reinicio
@@ -298,6 +313,7 @@ class Runner:
             else:
                 log.warning("entrada bloqueada: %s", why)
                 result = "bloqueada"
+        self.view = _view(last, row, result)
         self.last_bar = last["datetime"]  # so agora: se algo acima levantou excecao, a barra sera refeita
         self._save()
         return result

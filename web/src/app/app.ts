@@ -24,10 +24,12 @@ export class App {
   protected readonly theme = inject(ThemeService);
   protected readonly links = [
     { to: '/', label: 'Visão geral', short: 'Geral', icon: 'grid', exact: true },
+    { to: '/aovivo', label: 'Ao vivo', short: 'Ao vivo', icon: 'cpu', exact: false },
     { to: '/observar', label: 'Observatório', short: 'Observar', icon: 'pulse', exact: false },
     { to: '/operar', label: 'Operar', short: 'Operar', icon: 'sliders', exact: false },
     { to: '/boleta', label: 'Boleta', short: 'Boleta', icon: 'ticket', exact: false },
     { to: '/ia', label: 'IA', short: 'IA', icon: 'cpu', exact: false },
+    { to: '/pesquisa', label: 'Pesquisa', short: 'Pesquisa', icon: 'bars', exact: false },
     { to: '/trades', label: 'Trades', short: 'Trades', icon: 'bars', exact: false },
     { to: '/carteira', label: 'Carteira', short: 'Carteira', icon: 'pie', exact: false },
     { to: '/saude', label: 'Saúde', short: 'Saúde', icon: 'check', exact: false },

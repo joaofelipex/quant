@@ -14,6 +14,8 @@ export const routes: Routes = [
   { path: 'ia', title: 'quant · ia', loadComponent: () => import('./pages/agent.page').then(m => m.AgentPage) },
   { path: 'trades', title: 'quant · trades', loadComponent: () => import('./pages/trades.page').then(m => m.TradesPage) },
   { path: 'carteira', title: 'quant · carteira', loadComponent: () => import('./pages/portfolio.page').then(m => m.PortfolioPage) },
+  { path: 'aovivo', title: 'quant · ao vivo', loadComponent: () => import('./pages/live.page').then(m => m.LivePage) },
+  { path: 'pesquisa', title: 'quant · pesquisa', loadComponent: () => import('./pages/research.page').then(m => m.ResearchPage) },
   { path: 'observar', title: 'quant · observatório', loadComponent: () => import('./pages/observe.page').then(m => m.ObservePage) },
   { path: 'saude', title: 'quant · saúde', loadComponent: () => import('./pages/health.page').then(m => m.HealthPage) },
   { path: 'gestao', title: 'quant · gestão', loadComponent: () => import('./pages/manage.page').then(m => m.ManagePage) },

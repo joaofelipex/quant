@@ -162,7 +162,8 @@ def agent_status(directory: Path, key_file: Path = Path("/etc/quant/agent.env"))
     return {"config": cfg, "state": state, "chave": key_file.exists() or agent.cli_ready(os.environ.get),
             "backend": os.environ.get("QUANT_AGENT_BACKEND", "api"), "modelos": list(agent.MODELS),
             "pnl_hoje": round(pnl, 4), "livro": agent.read_book(directory),
-            "decisoes": agent.read_decisions(directory / "decisions.jsonl", 30)}
+            "decisoes": [{k: v for k, v in d.items() if k != "leitura"}  # a leitura vai so em /api/live
+                         for d in agent.read_decisions(directory / "decisions.jsonl", 30)]}
 
 
 def read_metrics(path: Path, *, now: float | None = None) -> dict:
@@ -612,6 +613,8 @@ def make_handler(state_path: Path, kill_file: Path, runtime_path: Path = RUNTIME
             elif path == "/api/agent":
                 self._json(200, agent_status(Path(os.environ.get("QUANT_AGENT_DIR", "/var/lib/quant/agent")),
                                              Path(os.environ.get("QUANT_AGENT_ENV", "/etc/quant/agent.env"))))
+            elif path in ("/api/live", "/api/flow", "/api/research"):
+                self._insight(path)
             elif path == "/api/metrics":
                 folder = os.environ.get("QUANT_METRICS_DIR", "/var/lib/quant/metrics")
                 self._json(200, read_metrics(Path(folder) / "metrics.json"))
@@ -628,6 +631,30 @@ def make_handler(state_path: Path, kill_file: Path, runtime_path: Path = RUNTIME
                                              "QUANT_DIRECTION": ["both", "long"]}})
             else:
                 self._json(404, {"erro": "nao encontrado"})
+
+        def _insight(self, path: str) -> None:
+            """Telas de analise: so leitura de arquivos locais."""
+            from . import insight
+
+            if path == "/api/research":
+                return self._json(200, {"estudos": insight.research()})
+            agent_dir = Path(os.environ.get("QUANT_AGENT_DIR", "/var/lib/quant/agent"))
+            flow_dir = Path(os.environ.get("QUANT_FLOW_DIR", "/var/lib/quant/flow"))
+            if path == "/api/flow":
+                q = parse_qs(urlsplit(self.path).query)
+                try:
+                    hours = float((q.get("horas") or ["6"])[0])
+                    return self._json(200, insight.flow_series(flow_dir, agent_dir, (q.get("asset") or [""])[0], hours))
+                except ValueError as e:
+                    return self._json(400, {"erro": str(e)})
+            cfg = {**read_runtime(runtime_path), **runner_config()}
+            names = [a for a in cfg.get("QUANT_ASSETS", "").split(",") if a]
+            try:
+                er_min = float(cfg.get("QUANT_ER") or 0.5)
+            except ValueError:
+                er_min = 0.5
+            metrics = Path(os.environ.get("QUANT_METRICS_DIR", "/var/lib/quant/metrics")) / "metrics.json"
+            return self._json(200, insight.live(agent_dir, state_path.parent, flow_dir, metrics, names, er_min))
 
         def do_POST(self):  # noqa: N802
             # o navegador manda a senha do nginx sozinho: o cabecalho proprio barra CSRF (so JS da mesma origem)

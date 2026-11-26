@@ -532,6 +532,7 @@ def run_cycle(cfg: dict, deps: Deps, book: dict, closed: dict | None = None) -> 
                         "ganho_minimo_pct": round(cfg["edge_min"] * ctx.costs[a]["cost_bps"] / 100, 3),
                         **(feats.get(a) or {})} for a in cand if a in by_asset],
     }
+    rec["leitura"] = snap["candidatos"]  # os numeros que o modelo viu: o painel mostra e da para auditar
     try:
         decision, usage = deps.llm(SYSTEM, build_user(snap))
     except Exception as e:  # noqa: BLE001 - qualquer falha do modelo = ciclo sem acao (os stops continuam na corretora)
