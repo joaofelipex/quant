@@ -54,6 +54,7 @@ DEFAULTS: dict = {
     "candidates": 12,          # ativos com analise detalhada por ciclo
     "universe": "tudo",        # "tudo", "todos" (20 cripto) ou lista: BTC,NVDA,...
     "edge_min": 2.0,           # o alvo da entrada precisa cobrir N vezes o custo de entrar e sair (0 desliga)
+    "shadow": False,           # modo sombra: decide e registra, mas nao envia ordem de abertura
 }
 
 # taxa por lado em bps, medida nas execucoes da Kalshi demo de 24 a 26/11/2026 (valor tipico mais alto de cada classe)
@@ -89,7 +90,7 @@ def validate_config(updates: dict) -> dict:
         raise ConfigError(f"parametro nao permitido: {', '.join(sorted(unknown))}")
     out: dict = {}
     for k, v in updates.items():
-        if k in ("enabled", "long_only"):
+        if k in ("enabled", "long_only", "shadow"):
             if not isinstance(v, bool):
                 raise ConfigError(f"{k} deve ser verdadeiro ou falso")
             out[k] = v
@@ -402,6 +403,32 @@ def cli_ready(env=os.environ.get) -> bool:
     return (Path(env("QUANT_CLAUDE_HOME", str(CLAUDE_HOME))) / ".claude" / ".credentials.json").exists()
 
 
+# ---- modo sombra ----------------------------------------------------------------------------------------------------
+def shadow_result(pos: dict, price: float) -> float:
+    """Resultado liquido, em bps, de uma posicao simulada que saisse a ``price`` (desconta o custo de ida e volta)."""
+    return pos["side"] * (price / pos["entry"] - 1) * 1e4 - pos.get("cost_bps", 0.0)
+
+
+def shadow_execute(a: dict, book: dict, by_asset: dict, costs: dict, closed: dict, now: float) -> dict:
+    """Abre/fecha so no papel, ao preco justo do ciclo. Nenhuma ordem sai daqui."""
+    asset = a["ativo"]
+    price = (by_asset.get(asset) or {}).get("mark")
+    if not price:
+        return {"ok": False, "msg": "sombra: sem preco desse ativo neste ciclo"}
+    if a["acao"] == "abrir":
+        cost = (costs.get(asset) or {}).get("cost_bps")
+        if cost is None:
+            cost = round_trip_bps(asset, by_asset[asset].get("spread_bps", 0.0))
+        book[asset] = {"opened_at": now, "reason": a["motivo"], "side": a["side"], "usd": a["usd"], "shadow": True,
+                       "entry": price, "stop_pct": a["stop_pct"], "cost_bps": cost}
+        return {"ok": True, "msg": f"sombra: abriria a {price:.6g}"}
+    pos = book.pop(asset)
+    exit_price = a.get("preco") or price
+    net = round(shadow_result(pos, exit_price), 1)
+    closed[asset] = now
+    return {"ok": True, "msg": f"sombra: fecharia a {exit_price:.6g}, liquido {net:+.1f} bps", "liquido_bps": net}
+
+
 # ---- ciclo ----------------------------------------------------------------------------------------------------------
 @dataclass
 class Deps:
@@ -420,8 +447,10 @@ class Deps:
     now: Callable[[], float] = time.time
 
 
-def run_cycle(cfg: dict, deps: Deps, book: dict) -> dict:
-    """Um ciclo completo. Devolve o registro (vai para decisions.jsonl). ``book`` e atualizado no lugar."""
+def run_cycle(cfg: dict, deps: Deps, book: dict, closed: dict | None = None) -> dict:
+    """Um ciclo completo. Devolve o registro (vai para decisions.jsonl). ``book`` e atualizado no lugar; ``closed``
+    guarda quando cada posicao simulada foi fechada (cooldown do modo sombra)."""
+    closed = {} if closed is None else closed
     now = deps.now()
     rec: dict = {"t": int(now), "model": cfg["model"], "acoes": [], "erro": None}
     universe = assets_mod.parse(cfg["universe"])
@@ -429,11 +458,23 @@ def run_cycle(cfg: dict, deps: Deps, book: dict) -> dict:
     deps.record_flow(rows, int(now))
     runner_active, runner_assets = deps.runner()
     pos_all = deps.positions()
-    held = {a: p for a, p in pos_all.items() if not (runner_active and a in runner_assets)}
+    real = {a: p for a, p in pos_all.items() if not (runner_active and a in runner_assets)}
+    if not cfg["shadow"]:  # saiu do modo sombra: as posicoes simuladas deixam de existir
+        for a in [a for a, v in book.items() if v.get("shadow")]:
+            book.pop(a)
+    virtual = {a: {"side": v["side"], "entry": v["entry"]} for a, v in book.items()
+               if v.get("shadow") and a not in real}
+    held = {**virtual, **real}
+    last_close = dict(deps.last_close())
+    if cfg["shadow"]:
+        for a, t in closed.items():
+            last_close[a] = max(t, last_close.get(a, 0.0))
     ctx = Ctx(universe=set(universe), held=held, runner_assets=runner_assets, runner_active=runner_active,
-              kill=deps.kill(), mode_ok=deps.mode_ok(), pnl_today=deps.pnl_today(now), last_close=deps.last_close(),
+              kill=deps.kill(), mode_ok=deps.mode_ok(), pnl_today=deps.pnl_today(now), last_close=last_close,
               now=now)
     rec.update(universo=len(universe), fotos=len(rows), posicoes=sorted(held), pnl_dia=round(ctx.pnl_today, 4))
+    if cfg["shadow"]:
+        rec["sombra"] = True
 
     forced = []  # fechamentos por regra (tempo maximo), antes de perguntar ao modelo
     for a in held:
@@ -442,6 +483,12 @@ def run_cycle(cfg: dict, deps: Deps, book: dict) -> dict:
             forced.append({"acao": "fechar", "ativo": a, "motivo": f"tempo maximo de {cfg['max_hold_h']:g} h"})
 
     by_asset = {r["asset"]: r for r in rows}
+    for a in virtual:  # stop simulado: so e conferido a cada ciclo, ao preco justo
+        pos, price = book[a], (by_asset.get(a) or {}).get("mark")
+        stop = pos["entry"] * (1 - pos["side"] * pos["stop_pct"] / 100)
+        if price and pos["side"] * (price - stop) <= 0:
+            forced = [f for f in forced if f["ativo"] != a]
+            forced.append({"acao": "fechar", "ativo": a, "motivo": "stop simulado", "preco": stop})
     cand = pick_candidates(rows, set(held), cfg["candidates"], cfg["max_usd"])
     rec["candidatos"] = cand
     with ThreadPoolExecutor(max_workers=8) as pool:
@@ -485,10 +532,20 @@ def run_cycle(cfg: dict, deps: Deps, book: dict) -> dict:
     for b in bad:
         rec["acoes"].append({**b, "status": "recusada"})
     for a in ok:
+        keys = ("acao", "ativo", "side", "usd", "stop_pct", "alvo_pct", "motivo", "ajustado")
+        # em sombra nada novo vai a corretora; fechar uma posicao REAL que sobrou continua valendo
+        if cfg["shadow"] and (a["acao"] == "abrir" or a["ativo"] in virtual):
+            res = shadow_execute(a, book, by_asset, ctx.costs, closed, now)
+            item = {k: a.get(k) for k in keys}
+            item.update(status="sombra" if res["ok"] else "falhou", detalhe=res["msg"])
+            if "liquido_bps" in res:
+                item["liquido_bps"] = res["liquido_bps"]
+            rec["acoes"].append(item)
+            continue
         if a["acao"] == "fechar":
             a = {**a, "entry_fee": (book.get(a["ativo"]) or {}).get("fee")}
         res = deps.execute(a)
-        item = {k: a.get(k) for k in ("acao", "ativo", "side", "usd", "stop_pct", "alvo_pct", "motivo", "ajustado")}
+        item = {k: a.get(k) for k in keys}
         item.update(status="executada" if res.get("ok") else "falhou", detalhe=str(res.get("msg", ""))[:200])
         if res.get("aviso"):
             item["aviso"] = str(res["aviso"])[:200]
@@ -685,7 +742,9 @@ def run_once(directory: Path = AGENT_DIR, *, force: bool = False, deps: Deps | N
         return {"erro": state["last_error"]}
     deps = deps or real_deps(env, directory)
     book = _read_json(directory / "book.json", {})
-    rec = run_cycle(cfg, deps, book)
+    closed = state.get("sombra_fechadas") or {}
+    rec = run_cycle(cfg, deps, book, closed)
+    state["sombra_fechadas"] = closed
     _write_json(directory / "book.json", book)
     append_decision(directory / "decisions.jsonl", rec)
     state.update(last_error=rec["erro"], ciclos=int(state.get("ciclos", 0)) + 1,

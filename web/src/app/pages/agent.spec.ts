@@ -11,7 +11,7 @@ const me = (role: Me['role']): Me => ({ id: 'a', user: 'u', role, sid: 's', totp
 
 const STATUS = (over: Partial<AgentStatus> = {}): AgentStatus => ({
   config: { enabled: false, model: 'claude-sonnet-5-5', interval_min: 10, max_usd: 15, max_positions: 5, max_daily_loss: 2,
-            long_only: true, stop_min: 0.5, stop_max: 5, cooldown_min: 20, max_actions: 3, max_hold_h: 24, candidates: 12, universe: 'tudo', edge_min: 2 },
+            long_only: true, stop_min: 0.5, stop_max: 5, cooldown_min: 20, max_actions: 3, max_hold_h: 24, candidates: 12, universe: 'tudo', edge_min: 2, shadow: false },
   chave: true, modelos: ['claude-sonnet-5-5', 'claude-haiku-5-5'], pnl_hoje: -0.5, state: { ciclos: 4, tokens: 5000, last_error: null },
   livro: { NVDA: { opened_at: 1795000000, reason: 'fluxo comprador', side: 1, usd: 12 } },
   decisoes: [{ t: 1795000100, analise: 'Sem vantagem clara.', universo: 145, fotos: 140, pnl_dia: -0.5, uso: { input_tokens: 3000, output_tokens: 200 },

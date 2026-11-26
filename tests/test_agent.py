@@ -70,6 +70,57 @@ class TestCustos:
         assert "+1.4000" in out["msg"]  # sem a taxa guardada: estima igual a da saida
 
 
+class TestSombra:
+    CFG_S = {**CFG, "shadow": True, "edge_min": 0}
+
+    def fake(self, decisao, mark=100.0, pos=None):
+        enviadas = []
+        rows = [{"asset": "NVDA", "spread_bps": 6.0, "mark": mark, "imb_25": 0.1, "imb_100": 0.1, "imb_top5": 0.1,
+                 "bid_usd_100": 1e6, "ask_usd_100": 1e6}]
+        deps = Deps(snapshot=lambda n: rows, candles=lambda a: {"vol_1m_bps": 20.0}, positions=lambda: pos or {},
+                    llm=lambda s, u: ({"analise": "x", "acoes": decisao}, {}),
+                    execute=lambda a: enviadas.append(a) or {"ok": True, "msg": "ok"},
+                    runner=lambda: (False, set()), pnl_today=lambda t: 0.0, last_close=lambda: {},
+                    kill=lambda: False, mode_ok=lambda: True, now=lambda: NOW)
+        return deps, enviadas
+
+    def test_abre_so_no_papel(self):
+        deps, enviadas = self.fake([abrir()])
+        book = {}
+        rec = agent.run_cycle(self.CFG_S, deps, book)
+        assert enviadas == [] and rec["sombra"] and rec["acoes"][0]["status"] == "sombra"
+        assert book["NVDA"]["shadow"] and book["NVDA"]["entry"] == 100.0
+
+    def test_fecha_no_papel_com_resultado_liquido_e_cooldown(self):
+        book, closed = {}, {}
+        agent.run_cycle(self.CFG_S, self.fake([abrir()])[0], book, closed)
+        deps, enviadas = self.fake([{"acao": "fechar", "ativo": "NVDA", "motivo": "x"}], mark=101.0)
+        rec = agent.run_cycle(self.CFG_S, deps, book, closed)
+        assert enviadas == [] and book == {} and closed == {"NVDA": NOW}
+        assert rec["acoes"][0]["liquido_bps"] == pytest.approx(100 - 30, abs=0.1)  # 2 x 12 + spread 6
+        rec = agent.run_cycle(self.CFG_S, self.fake([abrir()])[0], book, closed)
+        assert "cooldown" in rec["acoes"][0]["why"]
+
+    def test_stop_simulado_sai_no_preco_do_stop(self):
+        book = {}
+        agent.run_cycle(self.CFG_S, self.fake([abrir(stop=1.0)])[0], book)
+        deps, enviadas = self.fake([], mark=97.0)
+        rec = agent.run_cycle(self.CFG_S, deps, book)
+        assert enviadas == [] and book == {} and rec["acoes"][0]["liquido_bps"] == pytest.approx(-130, abs=0.1)
+
+    def test_posicao_real_continua_podendo_ser_fechada(self):
+        deps, enviadas = self.fake([{"acao": "fechar", "ativo": "NVDA", "motivo": "x"}],
+                                   pos={"NVDA": {"side": 1, "contracts": 1, "entry": 99.0}})
+        agent.run_cycle(self.CFG_S, deps, {})
+        assert [a["acao"] for a in enviadas] == ["fechar"]
+
+    def test_sair_do_modo_sombra_apaga_as_simuladas(self):
+        book = {}
+        agent.run_cycle(self.CFG_S, self.fake([abrir()])[0], book)
+        agent.run_cycle({**CFG, "shadow": False}, self.fake([])[0], book)
+        assert book == {}
+
+
 class TestTravas:
     def test_abertura_valida_passa(self):
         ok, bad = validate([abrir()], ctx(), CFG)

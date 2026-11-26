@@ -16,6 +16,7 @@ import { ToastService } from '../shared/toast';
 const NO_CONFIG: AgentConfig = {
   enabled: false, model: '', interval_min: 10, max_usd: 15, max_positions: 5, max_daily_loss: 2, long_only: true, stop_min: 0.5,
   stop_max: 5, cooldown_min: 20, max_actions: 3, max_hold_h: 24, candidates: 12, universe: 'tudo', edge_min: 2,
+  shadow: false,
 };
 
 const FIELDS: { key: string; label: string; hint: string }[] = [
@@ -117,6 +118,10 @@ const FIELDS: { key: string; label: string; hint: string }[] = [
           <label class="field"><span>Universo</span>
             <input [disabled]="!auth.isAdmin()" [ngModel]="form()['universe']" (ngModelChange)="set('universe', $event)" name="universe">
             <span class="hint">tudo, todos (20 cripto) ou lista: BTC,NVDA,AAPL</span></label>
+          <label class="field"><span>Modo</span>
+            <select [disabled]="!auth.isAdmin()" [ngModel]="form()['shadow']" (ngModelChange)="set('shadow', $event)" name="shadow">
+              <option [ngValue]="false">envia ordens (demo)</option><option [ngValue]="true">sombra (só registra)</option>
+            </select><span class="hint">em sombra a IA decide e anota, sem abrir posição</span></label>
           <label class="field"><span>Direção</span>
             <select [disabled]="!auth.isAdmin()" [ngModel]="form()['long_only']" (ngModelChange)="set('long_only', $event)" name="long_only">
               <option [ngValue]="true">só comprado (long)</option><option [ngValue]="false">comprado e vendido</option>
@@ -169,8 +174,8 @@ export class AgentPage {
     });
   }
 
-  protected pill(status: string): string { return status === 'executada' ? 'ok' : status === 'recusada' ? 'warn' : 'bad'; }
-  protected set(k: string, v: unknown): void { this.form.update(f => ({ ...f, [k]: ['model', 'universe', 'long_only'].includes(k) ? v : v === '' ? '' : Number(v) })); }
+  protected pill(status: string): string { return status === 'executada' ? 'ok' : status === 'recusada' || status === 'sombra' ? 'warn' : 'bad'; }
+  protected set(k: string, v: unknown): void { this.form.update(f => ({ ...f, [k]: ['model', 'universe', 'long_only', 'shadow'].includes(k) ? v : v === '' ? '' : Number(v) })); }
   protected reset(): void { this.form.set({ ...this.initial() }); }
 
   private go(call: ReturnType<ApiService['agentToggle']>, ok: string): void {
