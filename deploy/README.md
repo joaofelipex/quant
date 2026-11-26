@@ -242,3 +242,12 @@ O botão "Enviar alerta de teste" do painel confirma o canal. O painel nunca mos
 "Atualizar código": a VM valida o pacote (sem caminhos suspeitos), roda a suite **numa cópia de staging**, faz backup
 (`/var/lib/quant/backups`, guarda 5), aplica e confere que importa; se algo falhar, restaura sozinha. Depois reinicie o
 runner para usar o código novo. "Reverter" volta ao último backup. O polkit libera só `start` dessas units e o restart do painel.
+
+## Observabilidade (tela Observatorio)
+
+O `quant-metrics.timer` roda `python -m quant.observ` a cada 2 min: le (so GET) saldo, execucoes, funding, posicoes e
+stops da Kalshi demo, junta com o diario da IA, o registro de trades e o estado dos servicos, e grava
+`/var/lib/quant/metrics/metrics.json`. O painel so le esse arquivo. Instalar uma vez, na VM:
+
+`sudo cp /opt/quant/deploy/quant-metrics.service /opt/quant/deploy/quant-metrics.timer /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable --now quant-metrics.timer`
+

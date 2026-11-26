@@ -14,6 +14,7 @@ export const routes: Routes = [
   { path: 'ia', title: 'quant · ia', loadComponent: () => import('./pages/agent.page').then(m => m.AgentPage) },
   { path: 'trades', title: 'quant · trades', loadComponent: () => import('./pages/trades.page').then(m => m.TradesPage) },
   { path: 'carteira', title: 'quant · carteira', loadComponent: () => import('./pages/portfolio.page').then(m => m.PortfolioPage) },
+  { path: 'observar', title: 'quant · observatório', loadComponent: () => import('./pages/observe.page').then(m => m.ObservePage) },
   { path: 'saude', title: 'quant · saúde', loadComponent: () => import('./pages/health.page').then(m => m.HealthPage) },
   { path: 'gestao', title: 'quant · gestão', loadComponent: () => import('./pages/manage.page').then(m => m.ManagePage) },
   { path: '**', redirectTo: '' },

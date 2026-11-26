@@ -110,4 +110,25 @@ export interface AgentStatus {
   livro: Record<string, { opened_at: number; reason: string; side: number; usd: number }>;
 }
 
+/** Linha de resultado agrupado (por origem, classe ou dia), em USD, conforme a corretora. */
+export interface MetricGroup { nome: string; posicoes: number; fechadas: number; ganhos: number; bruto: number; taxa: number; liquido: number }
+/** GET api/metrics: retrato gravado pela unit quant-metrics. `disponivel: false` = ainda nao ha coleta. */
+export interface Metrics {
+  disponivel: boolean; idade_s: number; em: number;
+  conta: { patrimonio: number; disponivel: number | null; inicial_implicito: number; liquido: number; bruto: number; taxas: number; funding: number; aberto: number; execucoes: number };
+  por_origem: MetricGroup[]; por_classe: MetricGroup[]; por_dia: MetricGroup[];
+  extremos: { asset: string; quem: string; liquido: number; em: number; corretora: boolean }[];
+  posicoes: { asset: string; quem: string; qtd: number; entrada: number; aberto: number; stop: boolean | null }[];
+  registro: { local: number; corretora: number; diferenca: number };
+  ia: { ligada: boolean; sombra: boolean; intervalo_min: number; modelo: string; ciclos_24h: number; erros_24h: number; falhas_24h: number;
+        ultimo_ciclo_s: number | null; ultima_analise: string; recusas: { motivo: string; n: number }[] };
+  sombra: { ciclos: number; abertas: number; fechadas: number; ganhos: number; media_bps: number | null; total_bps: number;
+            ultimas: { t: number; asset: string; bps: number }[] };
+  servicos: { unit: string; nome: string; estado: string }[];
+  travados: { asset: string; motivo: string }[];
+  kill: boolean;
+  equity: [number, number][];
+  problemas: { nivel: 'bad' | 'warn'; texto: string }[];
+}
+
 export type Tone = '' | 'ok' | 'bad' | 'warn';

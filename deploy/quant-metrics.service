@@ -1,0 +1,25 @@
+[Unit]
+Description=quant observabilidade: retrato da conta demo e dos servicos para o painel (so leitura)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=quant
+WorkingDirectory=/opt/quant
+# le a chave da Kalshi demo (como a boleta); o processo web so le o arquivo gerado
+EnvironmentFile=/etc/quant-live.env
+EnvironmentFile=-/var/lib/quant/runtime.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=QUANT_METRICS_DIR=/var/lib/quant/metrics
+Environment=QUANT_TRADES_LOG=/var/lib/quant/trades.csv
+Environment=QUANT_KILL_FILE=/var/lib/quant/KILL
+ExecStart=/opt/quant/.venv/bin/python -m quant.observ
+TimeoutStartSec=240
+Nice=10
+
+StateDirectory=quant
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/quant

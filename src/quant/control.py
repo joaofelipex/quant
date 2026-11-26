@@ -165,6 +165,16 @@ def agent_status(directory: Path, key_file: Path = Path("/etc/quant/agent.env"))
             "decisoes": agent.read_decisions(directory / "decisions.jsonl", 30)}
 
 
+def read_metrics(path: Path, *, now: float | None = None) -> dict:
+    """Retrato gravado por ``quant.observ`` (unit quant-metrics), com a idade; o painel nao fala com a corretora."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        age = round((time.time() if now is None else now) - float(data["em"]))
+    except (OSError, ValueError, KeyError, TypeError):
+        return {"disponivel": False}
+    return {"disponivel": True, "idade_s": age, **data}
+
+
 ORDER_REQUEST = Path("/var/lib/quant/order-request.json")
 ORDER_RESULT = Path("/var/lib/quant/order-result.json")
 ORDER_UNIT = "quant-order.service"
@@ -602,6 +612,9 @@ def make_handler(state_path: Path, kill_file: Path, runtime_path: Path = RUNTIME
             elif path == "/api/agent":
                 self._json(200, agent_status(Path(os.environ.get("QUANT_AGENT_DIR", "/var/lib/quant/agent")),
                                              Path(os.environ.get("QUANT_AGENT_ENV", "/etc/quant/agent.env"))))
+            elif path == "/api/metrics":
+                folder = os.environ.get("QUANT_METRICS_DIR", "/var/lib/quant/metrics")
+                self._json(200, read_metrics(Path(folder) / "metrics.json"))
             elif path == "/api/markets":
                 from .live import assets as assets_mod
 
