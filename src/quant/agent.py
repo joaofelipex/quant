@@ -158,6 +158,7 @@ class Ctx:
     pnl_today: float = 0.0                   # PnL realizado hoje das trades do agente
     last_close: dict[str, float] = field(default_factory=dict)  # ativo -> epoch do ultimo fechamento do agente
     now: float = 0.0
+    market_closed: set[str] = field(default_factory=set)  # fora do horario de negociacao: nem abre nem fecha
     costs: dict[str, dict] = field(default_factory=dict)  # ativo -> {cost_bps, move_bps (oscilacao tipica de 1 h)}
 
 
@@ -210,6 +211,8 @@ def validate(actions: list, ctx: Ctx, cfg: dict) -> tuple[list[dict], list[dict]
             refuse(a, "ativo fora do universo do agente")
         elif ctx.runner_active and asset in ctx.runner_assets:
             refuse(a, "ativo operado pelo runner agora")
+        elif asset in ctx.market_closed:
+            refuse(a, "mercado fechado agora")
         elif kind == "fechar":
             if asset not in held:
                 refuse(a, "nao ha posicao aberta nesse ativo")
@@ -297,6 +300,7 @@ Regras:
   Nao infle o alvo para passar na trava. Fechar cedo por uma oscilacao de poucos minutos faz a taxa comer o resultado.
 - Toda abertura precisa de 'usd', 'lado' e um 'stop_pct' coerente com a volatilidade (nem colado, que o ruido
   varre; nem longe demais). Respeite os limites que vierem em 'limites': o sistema recusa o que passar deles.
+- Posicao com 'mercado_fechado' nao pode ser fechada agora: nao peca, o stop segue na corretora.
 - Voce pode fechar posicoes abertas quando a tese acabou, o stop esta perto de ser tocado sem razao, ou o risco mudou.
 - Cada acao leva um 'motivo' curto e verificavel nos numeros recebidos.
 Responda SEMPRE chamando a ferramenta 'decide'."""
@@ -444,6 +448,7 @@ class Deps:
     kill: Callable[[], bool]
     mode_ok: Callable[[], bool]
     record_flow: Callable[[list[dict], int], None] = lambda rows, ts: None
+    is_open: Callable[[str], bool] = lambda asset: True   # mercado em horario de negociacao
     now: Callable[[], float] = time.time
 
 
@@ -490,8 +495,16 @@ def run_cycle(cfg: dict, deps: Deps, book: dict, closed: dict | None = None) -> 
             forced = [f for f in forced if f["ativo"] != a]
             forced.append({"acao": "fechar", "ativo": a, "motivo": "stop simulado", "preco": stop})
     cand = pick_candidates(rows, set(held), cfg["candidates"], cfg["max_usd"])
-    rec["candidatos"] = cand
     with ThreadPoolExecutor(max_workers=8) as pool:
+        nomes = sorted(set(cand) | set(held))
+        aberto = dict(zip(nomes, pool.map(lambda a: _safe(deps.is_open, a), nomes), strict=True))
+        # so o "fechado" confirmado bloqueia: falha na consulta nao pode impedir de fechar uma posicao
+        ctx.market_closed = {a for a, v in aberto.items() if v is False}
+        forced = [f for f in forced if f["ativo"] not in ctx.market_closed]
+        cand = [a for a in cand if a in held or a not in ctx.market_closed]
+        rec["candidatos"] = cand
+        if ctx.market_closed & set(held):
+            rec["mercado_fechado"] = sorted(ctx.market_closed & set(held))
         feats = dict(zip(cand, pool.map(lambda a: _safe(deps.candles, a), cand), strict=True))
     for a in cand:
         if a in by_asset:
@@ -509,6 +522,7 @@ def run_cycle(cfg: dict, deps: Deps, book: dict, closed: dict | None = None) -> 
                       "resultado_pct": round(p["side"] * ((by_asset[a]["mark"] / p["entry"]) - 1) * 100, 2)
                       if a in by_asset and p.get("entry") else None,
                       "aberta_ha_min": round((now - (book.get(a) or {}).get("opened_at", now)) / 60),
+                      "mercado_fechado": a in ctx.market_closed,
                       "motivo_da_abertura": (book.get(a) or {}).get("reason", "")} for a, p in held.items()],
         "candidatos": [{"ativo": a, "classe": assets_mod.CATALOG[a]["cls"], "nome": assets_mod.CATALOG[a]["title"],
                         "spread_bps": round(by_asset[a]["spread_bps"], 1), "imb_25": round(by_asset[a]["imb_25"], 3),
@@ -651,7 +665,7 @@ def real_deps(env=os.environ.get, directory: Path = AGENT_DIR) -> Deps:
     """Dependencias de verdade: Binance/Kalshi publicas, executor da Kalshi demo e o Claude."""
     from . import flow, manual
     from .live.config import build_kalshi
-    from .live.feed import KalshiFeed
+    from .live.feed import KalshiFeed, get_json
 
     key = env("ANTHROPIC_API_KEY", "")
     cfg = load_config(directory / "config.json")
@@ -695,6 +709,11 @@ def real_deps(env=os.environ.get, directory: Path = AGENT_DIR) -> Deps:
                               save_basis=manual._save_basis_factory(state), label=f"kalshi/testnet:{asset}",
                               why=f"ia: {a.get('motivo', '')[:80]}")
 
+    def is_open(a: str) -> bool:
+        url = f"{KalshiFeed.HOSTS['demo']}/trade-api/v2/margin/markets/{assets_mod.ticker(a)}"
+        m = get_json(url)["market"]
+        return m.get("status") == "active" and (m.get("schedule") or {}).get("is_open", True) is not False
+
     def runner():
         cfgv = _read_runtime(Path(env("QUANT_RUNTIME_ENV", "/var/lib/quant/runtime.env")))
         names = [x for x in cfgv.get("QUANT_ASSETS", "").split(",") if x in assets_mod.CATALOG]
@@ -713,7 +732,7 @@ def real_deps(env=os.environ.get, directory: Path = AGENT_DIR) -> Deps:
         pnl_today=lambda now: trades_of_agent(trades, now)[0],
         last_close=lambda: trades_of_agent(trades, time.time())[1],
         kill=lambda: kill.exists(), mode_ok=lambda: env("QUANT_MODE") == "testnet" and env("QUANT_VENUE") == "kalshi",
-        record_flow=lambda rows, ts: flow.write_rows(rows, flow_dir, ts))
+        record_flow=lambda rows, ts: flow.write_rows(rows, flow_dir, ts), is_open=is_open)
 
 
 def _read_runtime(path: Path) -> dict[str, str]:

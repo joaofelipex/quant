@@ -132,6 +132,13 @@ class Runner:
         except Exception:  # noqa: BLE001 - nao pode impedir o fechamento; stop reduce-only sem posicao e inofensivo
             log.exception("falha ao cancelar stops pendentes")
 
+    def _entry_fee(self, qty: float, exit_fee: float) -> float:
+        """Parte da taxa de entrada que cabe a ``qty``; sem registro dela, estima igual a da saida (mesma aliquota)."""
+        e = self.entry or {}
+        if e.get("fee") is None or not e.get("qty"):
+            return exit_fee
+        return float(e["fee"]) * min(qty / float(e["qty"]), 1.0)
+
     def _close(self, price: float, ts: pd.Timestamp, why: str) -> None:
         pos = self.executor.position()
         fill = self.executor.close_position(price)
@@ -151,15 +158,19 @@ class Runner:
                 fills.append(more)
         rest = self.executor.position() if fills else None
         if pos is not None and fills:
-            pnl = sum((f.price - pos.entry) * pos.side * f.qty - f.fee for f in fills)  # taxa de entrada nao rastreada
             qty = sum(f.qty for f in fills)
+            saida = sum(f.fee for f in fills)
+            pnl = sum((f.price - pos.entry) * pos.side * f.qty for f in fills) - saida - self._entry_fee(qty, saida)
             self.risk.record_trade(pnl, ts)
             self._record_trade(ts, pos.side, qty, pos.entry, fills[-1].price, pnl, why)
             log.info("saida (%s) @ %.4f pnl=%.2f", why, fills[-1].price, pnl)
         if rest is not None:  # sobrou posicao: NAO apaga o estado nem os stops; trava entradas ate alguem olhar
             log.error("posicao nao fechou por inteiro (restam %.6g); mantendo stop e travando entradas", rest.qty)
             if self.entry is not None:
+                sobra = rest.qty / float(self.entry["qty"]) if self.entry.get("qty") else 1.0
                 self.entry = {**self.entry, "qty": rest.qty}
+                if self.entry.get("fee") is not None:
+                    self.entry["fee"] = float(self.entry["fee"]) * min(sobra, 1.0)
             self.risk.halt("fechamento parcial")
             return
         self._cancel_stops()  # depois de fechar: um stop velho nao pode sobrar para a proxima posicao
@@ -183,7 +194,9 @@ class Runner:
         if pos is None:
             if self.entry is not None:  # fechada fora do runner (tipicamente o stop da corretora disparou)
                 e = self.entry
-                pnl = (float(self.stop) - e["price"]) * e["side"] * e["qty"]  # estimativa: saiu no stop
+                # estimativa: saiu no stop, pagando na saida a mesma taxa da entrada
+                fee = float(e.get("fee") or 0.0)
+                pnl = (float(self.stop) - e["price"]) * e["side"] * e["qty"] - 2 * fee
                 self.risk.record_trade(pnl, now)
                 self._record_trade(now, e["side"], e["qty"], e["price"], float(self.stop), pnl,
                                    "stop da corretora (estimado)")
@@ -295,7 +308,7 @@ class Runner:
         self.stop, self.entry = hint - sig * self.stop_dist, None  # provisorios; salvos antes de mandar a ordem
         self._save()
         fill = self.executor.market_order(sig, self._size(hint, weight), hint)
-        self.entry = {"side": sig, "qty": fill.qty, "price": fill.price}
+        self.entry = {"side": sig, "qty": fill.qty, "price": fill.price, "fee": fill.fee}
         self.ext = fill.price
         self.stop = fill.price - sig * self.stop_dist
         log.info("entrada %+d @ %.4f stop=%.4f", sig, fill.price, self.stop)

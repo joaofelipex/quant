@@ -59,7 +59,7 @@ def round_trips(fills: list[dict], opens: list[tuple[str, float]]) -> list[dict]
             a = asset_of(t)
             quem = "ia" if any(x == a and abs(ts - quando) <= MATCH_S for x, quando in opens) else "robo"
             v = aberta[t] = {"asset": a, "ticker": t, "quem": quem, "q": 0.0, "bruto": 0.0, "taxa": 0.0, "ini": ts,
-                             "fim": None, "corretora": False}
+                             "fim": None, "corretora": False, "lado": 1 if f["side"] == "bid" else -1}
         v["q"] = round(v["q"] + float(f["count"]) * (1 if f["side"] == "bid" else -1), 4)
         v["bruto"] += float(f.get("realized_pnl") or 0)
         v["taxa"] += float(f.get("fees") or 0)
@@ -101,7 +101,9 @@ def agent_stats(decisions: list[dict], now: float) -> dict:
     recusas = Counter(str(a.get("why", "")).split(" (")[0][:70] for d in recentes for a in d.get("acoes", [])
                       if a.get("status") == "recusada")
     return {"ciclos_24h": len(recentes), "erros_24h": sum(bool(d.get("erro")) for d in recentes),
-            "falhas_24h": sum(a.get("status") == "falhou" for d in recentes for a in d.get("acoes", [])),
+            # mercado fechado nao e falha do sistema (o agente deixou de tentar); o resto conta
+            "falhas_24h": sum(a.get("status") == "falhou" and "market_inactive" not in str(a.get("detalhe", ""))
+                              for d in recentes for a in d.get("acoes", [])),
             "ultimo_ciclo_s": round(now - decisions[-1]["t"]) if decisions else None,
             "ultima_analise": decisions[-1].get("analise", "") if decisions else "",
             "recusas": [{"motivo": m, "n": n} for m, n in recusas.most_common(6)]}
@@ -158,6 +160,7 @@ def snapshot(*, fills: list[dict], balance: dict, positions: list[dict], funding
             "aberto": float(p.get("unrealized_pnl") or 0), "stop": stops.get(p["market_ticker"])}
            for p in positions if float(p.get("position") or 0)]
     fechadas = [v for v in trips if v["fim"] is not None]
+    realizado = sum(v["bruto"] - v["taxa"] for v in fechadas)  # o registro local so tem posicoes encerradas
     snap = {
         "em": int(now),
         "conta": {"patrimonio": eq,
@@ -172,8 +175,8 @@ def snapshot(*, fills: list[dict], balance: dict, positions: list[dict], funding
                       "em": int(v["fim"]), "corretora": v["corretora"]}
                      for v in sorted(fechadas, key=lambda v: -abs(v["bruto"] - v["taxa"]))[:8]],
         "posicoes": pos,
-        "registro": {"local": round(local_pnl, 4), "corretora": round(bruto - taxa, 4),
-                     "diferenca": round(local_pnl - (bruto - taxa), 2)},
+        "registro": {"local": round(local_pnl, 4), "corretora": round(realizado, 4),
+                     "diferenca": round(local_pnl - realizado, 2)},
         "ia": {"ligada": bool(agent_cfg.get("enabled")), "sombra": bool(agent_cfg.get("shadow")),
                "intervalo_min": agent_cfg.get("interval_min", 10), "modelo": agent_cfg.get("model", ""),
                **agent_stats(decisions, now)},
@@ -248,7 +251,8 @@ def collect(env=os.environ.get, now: float | None = None) -> dict:
     ex = build_kalshi("testnet", env, assets_mod.ticker("BTC"))
 
     fills = sync_fills(ex, out_dir / "fills.jsonl")
-    balance = ex._req("GET", "/margin/balance")
+    # sem o parametro a Kalshi devolve saldo disponivel sempre zero
+    balance = ex._req("GET", "/margin/balance", params={"compute_available_balance": "true"})
     positions = ex._req("GET", "/margin/positions").get("positions", [])
     start = day(min((epoch(f["created_time"]) for f in fills), default=now))
     funding = ex._req("GET", "/margin/funding_history",
