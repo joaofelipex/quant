@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { Component, effect, inject } from '@angular/core';
+import { Component, computed, effect, inject, signal } from '@angular/core';
 import { Title } from '@angular/platform-browser';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { AuthService } from './core/auth.service';
@@ -22,19 +22,39 @@ export class App {
   protected readonly auth = inject(AuthService);
   protected readonly store = inject(StatusStore);
   protected readonly theme = inject(ThemeService);
-  protected readonly links = [
-    { to: '/', label: 'Visão geral', short: 'Geral', icon: 'grid', exact: true },
-    { to: '/aovivo', label: 'Ao vivo', short: 'Ao vivo', icon: 'cpu', exact: false },
-    { to: '/observar', label: 'Observatório', short: 'Observar', icon: 'pulse', exact: false },
-    { to: '/operar', label: 'Operar', short: 'Operar', icon: 'sliders', exact: false },
-    { to: '/boleta', label: 'Boleta', short: 'Boleta', icon: 'ticket', exact: false },
-    { to: '/ia', label: 'IA', short: 'IA', icon: 'cpu', exact: false },
-    { to: '/pesquisa', label: 'Pesquisa', short: 'Pesquisa', icon: 'bars', exact: false },
-    { to: '/trades', label: 'Trades', short: 'Trades', icon: 'bars', exact: false },
-    { to: '/carteira', label: 'Carteira', short: 'Carteira', icon: 'pie', exact: false },
-    { to: '/saude', label: 'Saúde', short: 'Saúde', icon: 'check', exact: false },
-    { to: '/gestao', label: 'Gestão', short: 'Gestão', icon: 'server', exact: false },
+  protected readonly groups = [
+    { title: 'Acompanhar', links: [
+      { to: '/', label: 'Visão geral', short: 'Geral', icon: 'grid' },
+      { to: '/aovivo', label: 'Ao vivo', short: 'Ao vivo', icon: 'radio' },
+      { to: '/observar', label: 'Observatório', short: 'Observar', icon: 'pulse' },
+      { to: '/trades', label: 'Trades', short: 'Trades', icon: 'list' },
+    ] },
+    { title: 'Agir', links: [
+      { to: '/operar', label: 'Operar', short: 'Operar', icon: 'sliders' },
+      { to: '/boleta', label: 'Boleta', short: 'Boleta', icon: 'ticket' },
+      { to: '/ia', label: 'IA', short: 'IA', icon: 'cpu' },
+    ] },
+    { title: 'Analisar', links: [
+      { to: '/pesquisa', label: 'Pesquisa', short: 'Pesquisa', icon: 'flask' },
+      { to: '/carteira', label: 'Carteira', short: 'Carteira', icon: 'pie' },
+    ] },
+    { title: 'Sistema', links: [
+      { to: '/saude', label: 'Saúde', short: 'Saúde', icon: 'check' },
+      { to: '/gestao', label: 'Gestão', short: 'Gestão', icon: 'server' },
+    ] },
   ];
+  private readonly links = this.groups.flatMap(g => g.links);
+  /** No celular: quatro atalhos fixos e o resto na folha "Mais". */
+  protected readonly tabs = ['/', '/aovivo', '/observar', '/ia'].map(to => this.links.find(l => l.to === to)!);
+  protected readonly rest = this.links.filter(l => !this.tabs.includes(l));
+  protected readonly more = signal(false);
+  protected readonly themeLabel = computed(() => 'tema ' + (this.theme.theme() === 'dark' ? 'claro' : 'escuro'));
+  /** Em que dinheiro o runner opera, sempre a vista. */
+  protected readonly mode = computed(() => {
+    const m = this.store.data()?.config?.['QUANT_MODE'];
+    if (!m) return null;
+    return m === 'live' ? { text: 'CONTA REAL', tone: 'bad' } : { text: m === 'paper' ? 'simulado' : 'conta de teste', tone: 'warn' };
+  });
 
   constructor() {
     this.auth.check();

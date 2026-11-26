@@ -11,9 +11,7 @@ type Filter = 'all' | 'win' | 'loss';
 @Component({
   selector: 'app-trades',
   imports: [Kpi, LineChart, PageHead, Icon],
-  styles: `.seg{display:inline-flex;border:1px solid var(--line-strong);border-radius:10px;overflow:hidden}
-    .seg button{font:inherit;font-size:13px;font-weight:600;padding:6px 13px;border:none;background:transparent;color:var(--mute);cursor:pointer}
-    .seg button.on{background:var(--accent-soft);color:var(--accent)}`,
+  styles: `.why{min-width:240px;max-width:460px}td:first-child{white-space:nowrap}`,
   template: `
     <app-page-head title="Trades" subtitle="Histórico de posições fechadas pelo runner e PnL acumulado">
       <a class="btn" href="api/trades.csv" download="trades.csv"><app-icon name="download" [size]="16" /> Baixar CSV</a>
@@ -42,7 +40,7 @@ type Filter = 'all' | 'win' | 'loss';
           </div>
         </div>
         @if (rows().length) {
-          <div class="scroll-x">
+          <div class="scroll-y">
             <table>
               <thead><tr><th>quando</th><th>lado</th><th class="r">entrada</th><th class="r">saída</th><th class="r">PnL</th><th>motivo</th><th>origem</th></tr></thead>
               <tbody>
@@ -53,7 +51,7 @@ type Filter = 'all' | 'win' | 'loss';
                     <td class="r">{{ fmt(x.entrada) }}</td>
                     <td class="r">{{ fmt(x.saida) }}</td>
                     <td class="r"><b [class]="tone(x.pnl)">{{ fmt(x.pnl, 4) }}</b></td>
-                    <td>{{ x.motivo }}</td>
+                    <td class="why"><span class="clamp" [title]="x.motivo">{{ x.motivo }}</span></td>
                     <td class="sub">{{ x.origem }}</td>
                   </tr>
                 }

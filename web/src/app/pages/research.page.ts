@@ -22,24 +22,31 @@ import { PageHead } from '../shared/page-head';
       <app-kpi label="liberados para conta real" value="0" sub="regra do repositório" />
     </div>
 
-    <div class="stack mt">
+    <div class="seg mt" role="group" aria-label="situação">
+      @for (o of kinds; track o.id) { <button [class.on]="kind() === o.id" (click)="kind.set(o.id)">{{ o.label }}</button> }
+    </div>
+
+    <div class="grid cols-2 mt">
       @for (s of shown(); track s.nome) {
         <section class="card">
-          <div class="card-h"><h2>{{ s.nome }}</h2><span class="pill" [class]="s.tom">{{ s.status }}</span></div>
+          <div class="card-h"><h2 class="mono">{{ s.nome }}</h2><span class="pill" [class]="s.tom">{{ s.status }}</span></div>
           <p>{{ s.hipotese }}</p>
           <p class="sub mt"><b>Resultado:</b> {{ s.resultado }}</p>
         </section>
-      } @empty { <div class="card"><div class="empty">{{ studies().length ? 'nenhum estudo com esse termo' : 'carregando…' }}</div></div> }
+      } @empty { <div class="card"><div class="empty">{{ studies().length ? 'nenhum estudo com esse filtro' : 'carregando…' }}</div></div> }
     </div>`,
 })
 export class ResearchPage {
   protected readonly studies = signal<Study[]>([]);
   protected readonly query = signal('');
+  protected readonly kinds = [{ id: '', label: 'todos' }, { id: 'bad', label: 'reprovados ou sem vantagem' }, { id: 'warn', label: 'em aberto' }];
+  protected readonly kind = signal('');
   protected readonly error = signal<string | null>(null);
   protected readonly failed = computed(() => this.studies().filter(s => s.tom === 'bad').length);
   protected readonly shown = computed(() => {
-    const q = this.query().trim().toLowerCase();
-    return !q ? this.studies() : this.studies().filter(s => `${s.nome} ${s.hipotese} ${s.resultado} ${s.status}`.toLowerCase().includes(q));
+    const q = this.query().trim().toLowerCase(), k = this.kind();
+    return this.studies().filter(s => (!k || s.tom === k)
+      && (!q || `${s.nome} ${s.hipotese} ${s.resultado} ${s.status}`.toLowerCase().includes(q)));
   });
 
   constructor() {

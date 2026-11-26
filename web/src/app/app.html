@@ -5,22 +5,29 @@
       <span class="logo" aria-hidden="true">q</span>
       <div><b>quant</b><span class="sub">painel de controle</span></div>
     </div>
-    <nav aria-label="seções">
-      @for (l of links; track l.to) {
-        <a [routerLink]="l.to" routerLinkActive="on" [routerLinkActiveOptions]="{ exact: l.exact }">
-          <app-icon [name]="l.icon" [size]="19" />
-          <span class="full">{{ l.label }}</span><span class="short">{{ l.short }}</span>
-        </a>
+    <nav class="menu" aria-label="seções">
+      @for (g of groups; track g.title) {
+        <span class="group">{{ g.title }}</span>
+        @for (l of g.links; track l.to) {
+          <a [routerLink]="l.to" routerLinkActive="on" [routerLinkActiveOptions]="{ exact: l.to === '/' }">
+            <app-icon [name]="l.icon" [size]="18" /> {{ l.label }}
+          </a>
+        }
       }
     </nav>
     <div class="foot">
-      <a class="btn ghost sm" href="/"><app-icon name="external" [size]="15" /> painel do paper</a>
-      <button class="btn ghost sm" (click)="theme.toggle()" [attr.aria-label]="'tema ' + (theme.theme() === 'dark' ? 'claro' : 'escuro')">
-        <app-icon [name]="theme.theme() === 'dark' ? 'sun' : 'moon'" [size]="15" /> {{ theme.theme() === 'dark' ? 'tema claro' : 'tema escuro' }}
-      </button>
-      <a class="btn ghost sm" routerLink="/conta"><app-icon name="user" [size]="15" /> {{ auth.user() }} · conta</a>
-      @if (auth.isAdmin()) { <a class="btn ghost sm" routerLink="/usuarios"><app-icon name="shield" [size]="15" /> usuários</a> }
-      <button class="btn ghost sm" (click)="auth.logout()"><app-icon name="logout" [size]="15" /> sair</button>
+      <a class="who" routerLink="/conta" routerLinkActive="on">
+        <span class="avatar" aria-hidden="true">{{ auth.user()!.slice(0, 1) }}</span>
+        <span class="name"><b>{{ auth.user() }}</b><span class="sub">minha conta</span></span>
+      </a>
+      <div class="tools">
+        <button class="btn ghost sm" (click)="theme.toggle()" [title]="themeLabel()" [attr.aria-label]="themeLabel()">
+          <app-icon [name]="theme.theme() === 'dark' ? 'sun' : 'moon'" [size]="16" />
+        </button>
+        @if (auth.isAdmin()) { <a class="btn ghost sm" routerLink="/usuarios" title="usuários" aria-label="usuários"><app-icon name="shield" [size]="16" /></a> }
+        <a class="btn ghost sm" href="/" title="painel do paper" aria-label="painel do paper"><app-icon name="external" [size]="16" /></a>
+        <button class="btn ghost sm" (click)="auth.logout()" title="sair" aria-label="sair"><app-icon name="logout" [size]="16" /></button>
+      </div>
     </div>
   </aside>
 
@@ -33,7 +40,8 @@
       } @else {
         <span class="pill bad"><span class="dot"></span>sem conexão</span>
       }
-      <span class="mobile-theme">
+      @if (mode(); as m) { <span class="pill" [class]="m.tone">{{ m.text }}</span> }
+      <span class="mobile-tools">
         <button class="btn ghost sm" (click)="theme.toggle()" aria-label="alternar tema">
           <app-icon [name]="theme.theme() === 'dark' ? 'sun' : 'moon'" [size]="16" />
         </button>
@@ -42,17 +50,40 @@
       </span>
     </div>
 
-    @if (auth.role() === 'leitor') {
-      <div class="alert warn" role="status"><app-icon name="shield" [size]="18" /> <span>Você entrou como leitor: só visualização. Peça a um administrador para mudar seu papel.</span></div>
-    }
-    @if (store.banner().tone === 'bad' || store.banner().tone === 'warn') {
-      <div class="alert" [class]="store.banner().tone" role="alert">
-        <app-icon name="alert" [size]="18" /> <span>{{ store.banner().text }}</span>
-      </div>
-    }
+    <div class="page">
+      @if (auth.role() === 'leitor') {
+        <div class="alert warn" role="status"><app-icon name="shield" [size]="18" /> <span>Você entrou como leitor: só visualização. Peça a um administrador para mudar seu papel.</span></div>
+      }
+      @if (store.banner().tone === 'bad' || store.banner().tone === 'warn') {
+        <div class="alert" [class]="store.banner().tone" role="alert">
+          <app-icon name="alert" [size]="18" /> <span>{{ store.banner().text }}</span>
+        </div>
+      }
 
-    <router-outlet />
+      <router-outlet />
+    </div>
   </div>
+
+  <nav class="tabbar" aria-label="seções (celular)">
+    @for (l of tabs; track l.to) {
+      <a [routerLink]="l.to" routerLinkActive="on" [routerLinkActiveOptions]="{ exact: l.to === '/' }" (click)="more.set(false)">
+        <app-icon [name]="l.icon" [size]="20" /> {{ l.short }}
+      </a>
+    }
+    <button [class.on]="more()" (click)="more.set(!more())" [attr.aria-expanded]="more()">
+      <app-icon name="menu" [size]="20" /> Mais
+    </button>
+  </nav>
+  @if (more()) {
+    <div class="scrim" (click)="more.set(false)"></div>
+    <nav class="sheet" aria-label="mais seções">
+      @for (l of rest; track l.to) {
+        <a [routerLink]="l.to" routerLinkActive="on" (click)="more.set(false)"><app-icon [name]="l.icon" [size]="20" /> {{ l.label }}</a>
+      }
+      @if (auth.isAdmin()) { <a routerLink="/usuarios" routerLinkActive="on" (click)="more.set(false)"><app-icon name="shield" [size]="20" /> Usuários</a> }
+      <a href="/"><app-icon name="external" [size]="20" /> Painel do paper</a>
+    </nav>
+  }
 </div>
 } @else if (auth.checked()) {
   <app-login />

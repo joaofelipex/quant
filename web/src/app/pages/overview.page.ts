@@ -43,7 +43,7 @@ interface PositionView { side: number; qty: number; entry: number }
           <div class="chips">
             <span class="pill" [class]="cfg()['QUANT_MODE'] === 'paper' ? '' : 'warn'">{{ cfg()['QUANT_MODE'] || '—' }}</span>
             <span class="pill accent">{{ cfg()['QUANT_VENUE'] || 'binance' }}</span>
-            <span class="sub">{{ modeNote() }} · ativo há {{ dur(d.health.uptime_s) }} · {{ d.health.memory_mb ?? '—' }} MB</span>
+            <span class="sub">{{ modeNote() }} · ativo há {{ dur(d.health.uptime_s) }}{{ d.health.memory_mb == null ? '' : ' · ' + d.health.memory_mb + ' MB' }}</span>
           </div>
         </div>
         <div class="price">
@@ -51,6 +51,21 @@ interface PositionView { side: number; qty: number; entry: number }
           <div class="p num">{{ lastPrice() }}</div>
           <div class="num" [class]="windowTone()">{{ windowChange() }}</div>
         </div>
+      </section>
+
+      <div class="grid cols-4 mt">
+        <app-kpi label="posição" [value]="positionLabel()" [sub]="positionSub()" [tone]="position() ? (position()!.side > 0 ? 'ok' : 'bad') : ''" />
+        <app-kpi label="PnL do dia" [value]="fmt(pnlDay(), 4)" [tone]="pnlTone()" [sub]="(risk().trades ?? 0) + ' trade(s) hoje · perda máx ' + (cfg()['QUANT_MAX_DAILY_LOSS'] || '—')" />
+        <app-kpi label="trava de risco" [value]="risk().halted ? 'TRAVADO' : 'livre'" [tone]="risk().halted ? 'bad' : 'ok'" [sub]="risk().halted ? (risk().reason || '') : 'entradas liberadas'" />
+        <app-kpi label="última barra" [value]="d.last_bar_age_s == null ? '—' : 'há ' + dur(d.last_bar_age_s)" [tone]="stale() && active() ? 'warn' : ''" [sub]="d.state?.last_bar || 'sem barra processada'" />
+      </div>
+
+      <section class="card mt">
+        <div class="card-h">
+          <div><h2>Preço recente</h2><div class="sub">{{ chartNote() }}</div></div>
+        </div>
+        <app-line-chart [values]="prices()" [labels]="times()" [lines]="refLines()" [height]="260"
+                        label="preço recente" empty="sem barras: o feed público está indisponível" />
       </section>
 
       @if (d.assets?.length) {
@@ -63,12 +78,12 @@ interface PositionView { side: number; qty: number; entry: number }
           @if (d.assets!.length > 8) {
             <div class="row mb-3">
               <input class="!w-64" type="search" placeholder="filtrar (ex.: NVDA)" [ngModel]="filter()" (ngModelChange)="filter.set($event)" name="f">
-              <label class="flex cursor-pointer items-center gap-2 text-[13.5px] text-mute"><input class="w-auto" type="checkbox"
+              <label class="flex cursor-pointer items-center gap-2 whitespace-nowrap text-[13.5px] text-mute"><input class="!w-auto" type="checkbox"
                 [ngModel]="onlyOpen()" (ngModelChange)="onlyOpen.set($event)" name="o"> só com posição ou travados</label>
               <span class="sub">{{ rows().length }} de {{ d.assets!.length }}</span>
             </div>
           }
-          <div class="scroll-x max-h-[420px] overflow-y-auto"><table>
+          <div class="scroll-y"><table>
             <thead><tr><th>Ativo</th><th>Posição</th><th class="r">PnL do dia</th><th class="r">Trades</th><th>Última barra</th><th>Estado</th></tr></thead>
             <tbody>
               @for (a of rows(); track a.asset) {
@@ -85,21 +100,6 @@ interface PositionView { side: number; qty: number; entry: number }
           </table></div>
         </section>
       }
-
-      <div class="grid cols-4 mt">
-        <app-kpi label="posição" [value]="positionLabel()" [sub]="positionSub()" [tone]="position() ? (position()!.side > 0 ? 'ok' : 'bad') : ''" />
-        <app-kpi label="PnL do dia" [value]="fmt(pnlDay(), 4)" [tone]="pnlTone()" [sub]="(risk().trades ?? 0) + ' trade(s) hoje · perda máx ' + (cfg()['QUANT_MAX_DAILY_LOSS'] || '—')" />
-        <app-kpi label="trava de risco" [value]="risk().halted ? 'TRAVADO' : 'livre'" [tone]="risk().halted ? 'bad' : 'ok'" [sub]="risk().halted ? (risk().reason || '') : 'entradas liberadas'" />
-        <app-kpi label="última barra" [value]="d.last_bar_age_s == null ? '—' : 'há ' + dur(d.last_bar_age_s)" [tone]="stale() && active() ? 'warn' : ''" [sub]="d.state?.last_bar || 'sem barra processada'" />
-      </div>
-
-      <section class="card mt">
-        <div class="card-h">
-          <div><h2>Preço recente</h2><div class="sub">{{ chartNote() }}</div></div>
-        </div>
-        <app-line-chart [values]="prices()" [labels]="times()" [lines]="refLines()" [height]="260"
-                        label="preço recente" empty="sem barras: o feed público está indisponível" />
-      </section>
 
       <div class="grid cols-2 mt">
         <section class="card">

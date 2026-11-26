@@ -29,14 +29,13 @@ export function heat(v: number | null | undefined, full: number): string {
   styles: `
     .funil{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
     .funil div{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+    .funil i{display:block;height:4px;margin-top:8px;border-radius:2px;background:var(--line);overflow:hidden}
+    .funil i::after{content:'';display:block;height:100%;width:var(--w);background:var(--accent)}
     .funil b{display:block;font-size:22px;font-variant-numeric:tabular-nums}
     .funil span{font-size:12px;color:var(--mute)}
     td.h{text-align:right;border-radius:4px}
     tr.pick{cursor:pointer}
     tr.sel{background:var(--accent-soft)}
-    .seg{display:inline-flex;border:1px solid var(--line-strong);border-radius:10px;overflow:hidden}
-    .seg button{font:inherit;font-size:13px;font-weight:600;padding:6px 13px;border:none;background:transparent;color:var(--mute);cursor:pointer}
-    .seg button.on{background:var(--accent-soft);color:var(--accent)}
     .hist{display:flex;align-items:flex-end;gap:2px;height:44px}
     .hist i{flex:1;background:var(--line-strong);border-radius:2px;min-height:3px}
     .hist i.on{background:var(--accent)}
@@ -61,11 +60,9 @@ export function heat(v: number | null | undefined, full: number): string {
         </div>
         @if (d.ia; as ia) {
           <div class="funil">
-            <div><b>{{ ia.funil.universo }}</b><span>ativos no universo</span></div>
-            <div><b>{{ ia.funil.fotos }}</b><span>com livro utilizável</span></div>
-            <div><b>{{ ia.funil.candidatos }}</b><span>analisados</span></div>
-            <div><b>{{ ia.funil.pedidos }}</b><span>ações pedidas</span></div>
-            <div><b>{{ ia.funil.aceitos }}</b><span>aceitas pelo código</span></div>
+            @for (e of stages(); track e.label) {
+              <div><b>{{ e.n }}</b><span>{{ e.label }}</span><i [style.--w]="e.pct + '%'"></i></div>
+            }
           </div>
           @if (ia.erro) { <div class="alert bad mt" role="alert"><span>{{ ia.erro }}</span></div> }
           <p class="note mt">{{ ia.analise || 'sem análise neste ciclo' }}</p>
@@ -74,7 +71,7 @@ export function heat(v: number | null | undefined, full: number): string {
           </div>
           <p class="sub">Últimos {{ ia.historico.length }} ciclos: a altura é o número de pedidos; em destaque, os que tiveram ação aceita.</p>
 
-          <div class="scroll-x mt"><table>
+          <div class="scroll-y mt"><table>
             <thead><tr><th>ativo</th><th class="r">5 min</th><th class="r">15 min</th><th class="r">60 min</th><th class="r">livro 1%</th><th class="r">spread</th><th class="r">custo</th><th>decisão</th></tr></thead>
             <tbody>
               @for (c of candidates(); track c.ativo) {
@@ -130,7 +127,7 @@ export function heat(v: number | null | undefined, full: number): string {
           <app-kpi label="em regime de tendência" [value]="'' + trending()" sub="ER acima do mínimo" />
           <app-kpi label="travados" [value]="'' + halted()" [tone]="halted() ? 'warn' : 'ok'" sub="trava de risco ligada" />
         </div>
-        <div class="scroll-x mt"><table>
+        <div class="scroll-y mt"><table>
           <thead><tr><th>ativo</th><th>situação</th><th>tendência</th><th class="r">falta subir</th><th class="r">falta cair</th><th class="r">ER</th><th class="r">livro 1%</th></tr></thead>
           <tbody>
             @for (r of d.robo; track r.ativo) {
@@ -162,6 +159,13 @@ export class LivePage {
   protected readonly candidates = computed<LiveCandidate[]>(() => {
     const list = this.d()?.ia?.candidatos ?? [];
     return [...list].sort((a, b) => Number(!!b.status) - Number(!!a.status));
+  });
+  protected readonly stages = computed(() => {
+    const f = this.d()?.ia?.funil;
+    if (!f) return [];
+    return ([[f.universo, 'ativos no universo'], [f.fotos, 'com livro utilizável'], [f.candidatos, 'analisados'],
+             [f.pedidos, 'ações pedidas'], [f.aceitos, 'aceitas pelo código']] as const)
+      .map(([n, label]) => ({ n, label, pct: f.universo ? Math.round((100 * n) / f.universo) : 0 }));
   });
   protected readonly prices = computed(() => (this.series()?.serie ?? []).map(p => p[1]));
   protected readonly imbalance = computed(() => (this.series()?.serie ?? []).map(p => p[2]));
