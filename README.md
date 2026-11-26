@@ -16,6 +16,7 @@ tentar derrubar a estratégia**, não confirmá-la.
 | [`runner_eth_1m`](estudos/runner_eth_1m/README.md) | A estratégia que o runner ao vivo usa (trend_follow, ETH 1 min) | PF 0,26 a 0,64 em 2023, 2024 e 2025 após 7 bps/lado | **reprovada** (perde em todos os anos) |
 | [`trend_19cripto`](estudos/trend_19cripto/README.md) | `trend_follow` 1 h com ER 0,5, canal 55, stop 2 ATR (+ trailing e tamanho por volatilidade) em 19 cripto, 2 anos | Teste (2º ano, buy&hold −42%): +38% (base) / +22% (final), Sharpe 1,45 / 1,73; DSR diário 0,13 / 0,22 com 64 tentativas | **inconclusiva** (DSR < 0,95; só acumula evidência na demo) |
 | [`regras_historico`](estudos/regras_historico/README.md) | 8 regras de entrada comprada (momento curto, queda, rompimento, tendência, filtro de taxas) em 19 cripto, 1 h, 2 anos, contra entrada em hora qualquer | Custo 30 bps: 3 de 32 combinações positivas nos dois períodos, nenhuma com t de teste ≥ 3; momento curto perde em todos os prazos | **reprovadas** |
+| [`vela_30min`](estudos/vela_30min/README.md) | Prever a próxima vela de 30 min (modelos e leitura de reversão) em BTC e ETH (Binance) e em metais, índices e câmbio (Kalshi demo) | Há algum sinal (AUC 0,50 a 0,70), menor que o custo: todas as classes perdem com preço executável | **reprovada** |
 | [`eth_flow`](estudos/eth_flow/README.md) | Scalper de agressão no ETH futuro | 1 dia de dado | hipótese |
 
 Nada acima está liberado para conta real. Diário do que já foi tentado: [`estudos/win_trend/diario.md`](estudos/win_trend/diario.md).
