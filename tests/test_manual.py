@@ -127,7 +127,7 @@ class TestExecute:
         assert rows[0].split(",") == manual.TRADE_FIELDS
         cols = rows[1].split(",")
         assert cols[1] == "kalshi/testnet" and cols[2] == "1" and cols[-1] == "manual"
-        assert float(cols[6]) == pytest.approx(0.01 * 100 - 0.01)  # (2100-2000)*0.01 - taxa
+        assert float(cols[6]) == pytest.approx(0.01 * 100 - 0.02)  # (2100-2000)*0.01 - taxas de entrada e saida
 
     def test_fechar_sem_posicao_e_inofensivo(self, tmp_path):
         assert run({"action": "close"}, FakeEx(), tmp_path)["ok"]

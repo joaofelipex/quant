@@ -7,21 +7,67 @@ import urllib.error
 import pandas as pd
 import pytest
 
-from quant import agent
-from quant.agent import Ctx, Deps, validate
+from quant import agent, manual
+from quant.agent import Ctx, Deps, round_trip_bps, validate
+from quant.live.models import Fill, Position
 
 NOW = 1_795_000_000.0
 CFG = {**agent.DEFAULTS, "enabled": True}
 
 
 def ctx(**kw):
-    base = {"universe": {"BTC", "NVDA", "AAPL", "ETH", "SOL"}, "held": {}, "now": NOW}
+    nomes = {"BTC", "NVDA", "AAPL", "ETH", "SOL"}
+    base = {"universe": nomes, "held": {}, "now": NOW,
+            "costs": {a: {"cost_bps": 30.0, "move_bps": 100.0} for a in nomes}}
     base.update(kw)
     return Ctx(**base)
 
 
 def abrir(ativo="NVDA", usd=10, stop=1.5, lado="comprado", motivo="teste"):
-    return {"acao": "abrir", "ativo": ativo, "lado": lado, "usd": usd, "stop_pct": stop, "motivo": motivo}
+    return {"acao": "abrir", "ativo": ativo, "lado": lado, "usd": usd, "stop_pct": stop, "alvo_pct": 0.8,
+            "motivo": motivo}
+
+
+class TestCustos:
+    def test_custo_soma_as_duas_taxas_e_o_spread(self):
+        assert round_trip_bps("NVDA", 8.0) == pytest.approx(32.0)
+        assert round_trip_bps("GOLD", 6.0) == pytest.approx(8.2)
+
+    @pytest.mark.parametrize("alvo", [None, "x", 0, 0.59, float("nan")])
+    def test_alvo_que_nao_paga_o_custo_e_recusado(self, alvo):
+        ok, bad = validate([{**abrir(), "alvo_pct": alvo}], ctx(), CFG)
+        assert not ok and "alvo" in bad[0]["why"]
+
+    def test_ativo_parado_demais_e_recusado_mesmo_com_alvo_alto(self):
+        c = ctx(costs={"NVDA": {"cost_bps": 30.0, "move_bps": 40.0}})
+        assert "oscila" in validate([{**abrir(), "alvo_pct": 5}], c, CFG)[1][0]["why"]
+
+    def test_sem_dados_de_custo_recusa_e_zero_desliga_a_trava(self):
+        assert "sem dados" in validate([abrir()], ctx(costs={}), CFG)[1][0]["why"]
+        assert validate([abrir()], ctx(costs={}), {**CFG, "edge_min": 0})[0]
+
+    def test_taxa_de_entrada_entra_no_resultado(self, tmp_path):
+        class Ex:
+            pos = Position(1, 2.0, 100.0)
+
+            def position(self):
+                return self.pos
+
+            def close_position(self, price):
+                self.pos = None
+                return Fill(-1, 2.0, 101.0, 0.30)
+
+            def cancel_stops(self):
+                pass
+
+            def has_stop(self):
+                return False
+
+        trades = tmp_path / "t.csv"
+        out = manual.execute({"action": "close", "entry_fee": 0.20}, Ex(), price_fn=lambda: 101.0, trades_path=trades)
+        assert "+1.5000" in out["msg"]
+        out = manual.execute({"action": "close"}, Ex(), price_fn=lambda: 101.0, trades_path=trades)
+        assert "+1.4000" in out["msg"]  # sem a taxa guardada: estima igual a da saida
 
 
 class TestTravas:
@@ -162,7 +208,7 @@ class Fake:
             return res
 
         return Deps(snapshot=lambda names: rows(*[x for x in assets if x in names]),
-                    candles=lambda a: {"ret_5m_bps": 3.0},
+                    candles=lambda a: {"ret_5m_bps": 3.0, "vol_1m_bps": 20.0},
                     positions=lambda: self.pos, llm=llm, execute=execute, runner=lambda: self.runner_state,
                     pnl_today=lambda t: self.pnl, last_close=lambda: {}, kill=lambda: self.killed,
                     mode_ok=lambda: self.mode, now=lambda: NOW)

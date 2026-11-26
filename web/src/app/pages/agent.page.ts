@@ -15,7 +15,7 @@ import { ToastService } from '../shared/toast';
 
 const NO_CONFIG: AgentConfig = {
   enabled: false, model: '', interval_min: 10, max_usd: 15, max_positions: 5, max_daily_loss: 2, long_only: true, stop_min: 0.5,
-  stop_max: 5, cooldown_min: 20, max_actions: 3, max_hold_h: 24, candidates: 12, universe: 'tudo',
+  stop_max: 5, cooldown_min: 20, max_actions: 3, max_hold_h: 24, candidates: 12, universe: 'tudo', edge_min: 2,
 };
 
 const FIELDS: { key: string; label: string; hint: string }[] = [
@@ -27,6 +27,7 @@ const FIELDS: { key: string; label: string; hint: string }[] = [
   { key: 'interval_min', label: 'Intervalo entre ciclos (min)', hint: 'cada ciclo é uma chamada ao modelo (custo)' },
   { key: 'cooldown_min', label: 'Espera após fechar um ativo (min)', hint: 'evita reabrir o mesmo ativo em seguida' },
   { key: 'max_hold_h', label: 'Tempo máximo de posição (h)', hint: 'fecha sozinha ao passar disto' },
+  { key: 'edge_min', label: 'Alvo mínimo (x o custo)', hint: 'ganho esperado precisa cobrir N vezes taxas + spread; 0 desliga' },
 ];
 
 @Component({

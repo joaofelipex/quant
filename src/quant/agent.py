@@ -53,7 +53,18 @@ DEFAULTS: dict = {
     "max_hold_h": 24,          # fecha a posicao que passar deste tempo
     "candidates": 12,          # ativos com analise detalhada por ciclo
     "universe": "tudo",        # "tudo", "todos" (20 cripto) ou lista: BTC,NVDA,...
+    "edge_min": 2.0,           # o alvo da entrada precisa cobrir N vezes o custo de entrar e sair (0 desliga)
 }
+
+# taxa por lado em bps, medida nas execucoes da Kalshi demo de 24 a 26/11/2026 (valor tipico mais alto de cada classe)
+FEE_BPS = {"Crypto": 12.0, "Equities": 12.0, "FX": 2.3, "Metals": 1.1, "Indices": 0.8}
+FEE_BPS_DEFAULT = 12.0         # classe nao medida: assume a mais cara
+
+
+def round_trip_bps(asset: str, spread_bps: float) -> float:
+    """Custo de entrar e sair: as duas taxas mais um spread inteiro."""
+    cls = (assets_mod.CATALOG.get(asset) or {}).get("cls")
+    return 2 * FEE_BPS.get(cls, FEE_BPS_DEFAULT) + spread_bps
 
 
 # ---- configuracao ---------------------------------------------------------------------------------------------------
@@ -98,9 +109,9 @@ def validate_config(updates: dict) -> dict:
             lo, hi = {"interval_min": (1, 240), "max_positions": (1, 20), "max_actions": (1, 6), "candidates": (4, 30),
                       "cooldown_min": (0, 1440)}[k]
             out[k] = int(_num(v, k, lo, hi))
-        else:  # max_usd, max_daily_loss, stop_min, stop_max, max_hold_h
+        else:  # max_usd, max_daily_loss, stop_min, stop_max, max_hold_h, edge_min
             lo, hi = {"max_usd": (1, 100), "max_daily_loss": (0.1, 100), "stop_min": (0.1, 20), "stop_max": (0.2, 30),
-                      "max_hold_h": (0.25, 168)}[k]
+                      "max_hold_h": (0.25, 168), "edge_min": (0, 10)}[k]
             out[k] = _num(v, k, lo, hi)
     return out
 
@@ -146,6 +157,26 @@ class Ctx:
     pnl_today: float = 0.0                   # PnL realizado hoje das trades do agente
     last_close: dict[str, float] = field(default_factory=dict)  # ativo -> epoch do ultimo fechamento do agente
     now: float = 0.0
+    costs: dict[str, dict] = field(default_factory=dict)  # ativo -> {cost_bps, move_bps (oscilacao tipica de 1 h)}
+
+
+def edge_refusal(a: dict, ctx: Ctx, cfg: dict) -> str | None:
+    """Motivo para recusar uma abertura que nao paga os custos; None se passa."""
+    if cfg["edge_min"] <= 0:
+        return None
+    c = ctx.costs.get(a["ativo"])
+    if not c or c.get("move_bps") is None:
+        return "sem dados de custo e volatilidade desse ativo neste ciclo"
+    need = cfg["edge_min"] * c["cost_bps"] / 100  # em %
+    try:
+        target = float(a.get("alvo_pct"))
+    except (TypeError, ValueError):
+        return "alvo_pct (ganho esperado em %) e obrigatorio"
+    if not target >= need:
+        return f"alvo de {target:g}% nao cobre {cfg['edge_min']:g}x o custo (minimo {need:.2f}%)"
+    if c["move_bps"] / 100 < need:
+        return f"ativo oscila ~{c['move_bps'] / 100:.2f}% por hora, menos que os {need:.2f}% para pagar o custo"
+    return None
 
 
 def validate(actions: list, ctx: Ctx, cfg: dict) -> tuple[list[dict], list[dict]]:
@@ -156,7 +187,8 @@ def validate(actions: list, ctx: Ctx, cfg: dict) -> tuple[list[dict], list[dict]
     n_open = len(held)
 
     def refuse(a, why):
-        bad.append({**{k: a.get(k) for k in ("acao", "ativo", "lado", "usd", "stop_pct", "motivo")}, "why": why})
+        keys = ("acao", "ativo", "lado", "usd", "stop_pct", "alvo_pct", "motivo")
+        bad.append({**{k: a.get(k) for k in keys}, "why": why})
 
     if not isinstance(actions, list):
         return [], [{"why": "acoes invalidas (nao e uma lista)"}]
@@ -208,9 +240,11 @@ def validate(actions: list, ctx: Ctx, cfg: dict) -> tuple[list[dict], list[dict]
                 refuse(a, f"stop deve ficar entre {cfg['stop_min']}% e {cfg['stop_max']}%")
             elif ctx.now - ctx.last_close.get(asset, 0.0) < cfg["cooldown_min"] * 60:
                 refuse(a, f"cooldown de {cfg['cooldown_min']} min depois de fechar esse ativo")
+            elif why := edge_refusal(a, ctx, cfg):
+                refuse(a, why)
             else:
                 ok.append({"acao": "abrir", "ativo": asset, "side": side, "usd": min(usd, cfg["max_usd"]),
-                           "stop_pct": stop, "motivo": str(a.get("motivo", ""))[:200],
+                           "stop_pct": stop, "alvo_pct": a.get("alvo_pct"), "motivo": str(a.get("motivo", ""))[:200],
                            "ajustado": usd > cfg["max_usd"]})
                 held.add(asset)
                 n_open += 1
@@ -256,7 +290,10 @@ Regras:
 - Voce so recebe numeros do proprio sistema. Nao ha noticias; nao invente fatos sobre empresas.
 - 'imb_100'/'imb_25'/'imb_topo5' vao de -1 (so venda no livro) a +1 (so compra); sao fracos sozinhos e podem ser
   armadilha (ofertas colocadas e retiradas). Pesem junto: tendencia (retornos), volatilidade e spread.
-- Custo de entrar + sair e cerca de 1x o spread. Nao abra se a vantagem esperada for menor que isso.
+- Entrar + sair custa as duas taxas da corretora mais o spread: veja 'custo_ida_volta_bps' de cada candidato (em
+  acoes e cripto passa de 24 bps; em metais, indices e cambio e bem menor). Em 'alvo_pct' informe o ganho que voce
+  espera de verdade; o sistema recusa alvo abaixo de 'ganho_minimo_pct' e ativo que quase nao oscila perto disso.
+  Nao infle o alvo para passar na trava. Fechar cedo por uma oscilacao de poucos minutos faz a taxa comer o resultado.
 - Toda abertura precisa de 'usd', 'lado' e um 'stop_pct' coerente com a volatilidade (nem colado, que o ruido
   varre; nem longe demais). Respeite os limites que vierem em 'limites': o sistema recusa o que passar deles.
 - Voce pode fechar posicoes abertas quando a tese acabou, o stop esta perto de ser tocado sem razao, ou o risco mudou.
@@ -276,6 +313,7 @@ TOOL = {
                 "lado": {"type": "string", "enum": ["comprado", "vendido"]},
                 "usd": {"type": "number", "description": "valor da entrada em USD"},
                 "stop_pct": {"type": "number", "description": "stop em % do preco de entrada"},
+                "alvo_pct": {"type": "number", "description": "ganho esperado em % (obrigatorio para abrir)"},
                 "motivo": {"type": "string"}}, "required": ["acao", "ativo", "motivo"]}},
         },
         "required": ["analise", "acoes"],
@@ -408,6 +446,11 @@ def run_cycle(cfg: dict, deps: Deps, book: dict) -> dict:
     rec["candidatos"] = cand
     with ThreadPoolExecutor(max_workers=8) as pool:
         feats = dict(zip(cand, pool.map(lambda a: _safe(deps.candles, a), cand), strict=True))
+    for a in cand:
+        if a in by_asset:
+            vol = (feats.get(a) or {}).get("vol_1m_bps")
+            ctx.costs[a] = {"cost_bps": round_trip_bps(a, by_asset[a]["spread_bps"]),
+                            "move_bps": None if vol is None else vol * 60 ** 0.5}
     snap = {
         "agora_utc": datetime.fromtimestamp(now, timezone.utc).strftime("%Y-%m-%d %H:%M"),
         "limites": {"max_usd_por_entrada": cfg["max_usd"], "max_posicoes": cfg["max_positions"],
@@ -424,6 +467,8 @@ def run_cycle(cfg: dict, deps: Deps, book: dict) -> dict:
                         "spread_bps": round(by_asset[a]["spread_bps"], 1), "imb_25": round(by_asset[a]["imb_25"], 3),
                         "imb_100": round(by_asset[a]["imb_100"], 3), "imb_topo5": round(by_asset[a]["imb_top5"], 3),
                         "livro_usd_1pct": round(min(by_asset[a]["bid_usd_100"], by_asset[a]["ask_usd_100"])),
+                        "custo_ida_volta_bps": round(ctx.costs[a]["cost_bps"], 1),
+                        "ganho_minimo_pct": round(cfg["edge_min"] * ctx.costs[a]["cost_bps"] / 100, 3),
                         **(feats.get(a) or {})} for a in cand if a in by_asset],
     }
     try:
@@ -440,16 +485,20 @@ def run_cycle(cfg: dict, deps: Deps, book: dict) -> dict:
     for b in bad:
         rec["acoes"].append({**b, "status": "recusada"})
     for a in ok:
+        if a["acao"] == "fechar":
+            a = {**a, "entry_fee": (book.get(a["ativo"]) or {}).get("fee")}
         res = deps.execute(a)
-        item = {k: a.get(k) for k in ("acao", "ativo", "side", "usd", "stop_pct", "motivo", "ajustado")}
+        item = {k: a.get(k) for k in ("acao", "ativo", "side", "usd", "stop_pct", "alvo_pct", "motivo", "ajustado")}
         item.update(status="executada" if res.get("ok") else "falhou", detalhe=str(res.get("msg", ""))[:200])
         if res.get("aviso"):
             item["aviso"] = str(res["aviso"])[:200]
         rec["acoes"].append(item)
         if res.get("ok") and a["acao"] == "abrir":
-            book[a["ativo"]] = {"opened_at": now, "reason": a["motivo"], "side": a["side"], "usd": a["usd"]}
+            book[a["ativo"]] = {"opened_at": now, "reason": a["motivo"], "side": a["side"], "usd": a["usd"],
+                                "fee": res.get("fee")}
             if "SEM stop" in str(res.get("aviso", "")):  # nunca fica posicao do agente sem stop
-                close = deps.execute({"acao": "fechar", "ativo": a["ativo"], "motivo": "sem stop protetor"})
+                close = deps.execute({"acao": "fechar", "ativo": a["ativo"], "motivo": "sem stop protetor",
+                                      "entry_fee": res.get("fee")})
                 item["fechada_por_seguranca"] = bool(close.get("ok"))
                 if close.get("ok"):
                     book.pop(a["ativo"], None)
@@ -580,6 +629,7 @@ def real_deps(env=os.environ.get, directory: Path = AGENT_DIR) -> Deps:
                                    "stop_pct": a["stop_pct"]})
         else:
             req = manual.validate({"action": "close", "asset": asset})
+            req["entry_fee"] = a.get("entry_fee")
         state = state_dir / f"live_state.{asset}.json"
 
         def price() -> float:

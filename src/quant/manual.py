@@ -132,7 +132,7 @@ def execute(req: dict, ex, *, price_fn, kill_file: Path | None = None, trades_pa
             save_basis(ex.export_state())
         aviso = _protect(ex, fill.side, fill.qty, fill.price, req.get("stop_pct"), StopRejected, KalshiError)
         side = "COMPRA" if fill.side > 0 else "VENDA"
-        res = {"ok": True, "msg": f"{side} executada: {fill.qty:g} @ {fill.price:.6g}",
+        res = {"ok": True, "msg": f"{side} executada: {fill.qty:g} @ {fill.price:.6g}", "fee": fill.fee,
                "position": _position_view(ex, price)}
         if aviso:
             res["aviso"] = aviso
@@ -161,9 +161,13 @@ def execute(req: dict, ex, *, price_fn, kill_file: Path | None = None, trades_pa
         log.exception("falha ao cancelar stops depois de fechar")
     pnl = 0.0
     if fill is not None:
-        pnl = (fill.price - pos.entry) * pos.side * pos.qty - fill.fee
+        qty = min(fill.qty, pos.qty)  # fechamento parcial: so conta o que saiu
+        entry_fee = req.get("entry_fee")
+        # sem a taxa de entrada guardada (posicao aberta a mao): estima pela taxa da saida, de mesma aliquota
+        entry_fee = fill.fee if entry_fee is None else entry_fee * qty / pos.qty
+        pnl = (fill.price - pos.entry) * pos.side * qty - fill.fee - entry_fee
         try:
-            _record_trade(trades_path, pos.side, pos.qty, pos.entry, fill.price, pnl, why, label)
+            _record_trade(trades_path, pos.side, qty, pos.entry, fill.price, pnl, why, label)
         except OSError:
             log.exception("nao consegui gravar o historico de trades")
     return {"ok": True, "msg": f"posicao fechada, PnL {pnl:+.4f}", "position": _position_view(ex, price)}
