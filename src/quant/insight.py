@@ -11,6 +11,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from .agent import load_config
 from .live import assets as assets_mod
 
 REPO = Path(__file__).resolve().parents[2]
@@ -125,7 +126,8 @@ def live(agent_dir: Path, state_dir: Path, flow_dir: Path, metrics: Path, names:
     fontes = [
         {"nome": "fotos do livro", "idade_s": age(max((r["ts"] for r in recent), default=None)), "limite_s": 180,
          "detalhe": f"{len(latest)} ativos nos últimos 15 min"},
-        {"nome": "ciclo da IA", "idade_s": age(decisions[-1].get("t") if decisions else None), "limite_s": 900,
+        {"nome": "ciclo da IA", "idade_s": age(decisions[-1].get("t") if decisions else None),
+         "limite_s": 3 * 60 * load_config(agent_dir / "config.json")["interval_min"],
          "detalhe": f"{len(decisions)} ciclos carregados"},
         {"nome": "barras do robô", "limite_s": 7500, "detalhe": f"{len(bars)} de {len(names)} ativos",
          "idade_s": age(datetime.fromisoformat(max(bars)).replace(tzinfo=timezone.utc).timestamp() if bars else None)},

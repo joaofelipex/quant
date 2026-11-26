@@ -335,6 +335,13 @@ class LLMError(RuntimeError):
     pass
 
 
+def usage_totals(u: dict) -> dict:
+    """Tokens do ciclo. A entrada soma o que foi gravado e lido do cache: ``input_tokens`` sozinho e quase zero."""
+    campos = ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")
+    entrada = sum(int(u.get(k) or 0) for k in campos)
+    return {"input_tokens": entrada, "output_tokens": int(u.get("output_tokens") or 0)}
+
+
 def call_claude(system: str, user: str, *, model: str, key: str, max_tokens: int = 1500, timeout: float = 90.0,
                 opener=urllib.request.urlopen) -> tuple[dict, dict]:
     """Chama a API de mensagens forcando a ferramenta ``decide``. Devolve (entrada da ferramenta, uso de tokens)."""
@@ -364,7 +371,7 @@ def call_claude(system: str, user: str, *, model: str, key: str, max_tokens: int
         raise last or LLMError("sem resposta")
     for block in data.get("content", []):
         if block.get("type") == "tool_use" and block.get("name") == "decide" and isinstance(block.get("input"), dict):
-            return block["input"], data.get("usage", {})
+            return block["input"], usage_totals(data.get("usage") or {})
     raise LLMError("o modelo nao chamou a ferramenta decide")
 
 
@@ -398,8 +405,7 @@ def call_cli(system: str, user: str, *, model: str, binary: str = "claude", home
             out = None
     if not isinstance(out, dict):
         raise LLMError("a CLI nao devolveu a decisao estruturada")
-    u = data.get("usage") or {}
-    return out, {"input_tokens": u.get("input_tokens", 0), "output_tokens": u.get("output_tokens", 0)}
+    return out, usage_totals(data.get("usage") or {})
 
 
 def cli_ready(env=os.environ.get) -> bool:

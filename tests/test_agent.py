@@ -70,6 +70,12 @@ class TestCustos:
         assert "+1.4000" in out["msg"]  # sem a taxa guardada: estima igual a da saida
 
 
+def test_tokens_somam_a_entrada_em_cache():
+    u = {"input_tokens": 2, "cache_creation_input_tokens": 4410, "cache_read_input_tokens": 1498, "output_tokens": 904}
+    assert agent.usage_totals(u) == {"input_tokens": 5910, "output_tokens": 904}
+    assert agent.usage_totals({}) == {"input_tokens": 0, "output_tokens": 0}
+
+
 class TestSombra:
     CFG_S = {**CFG, "shadow": True, "edge_min": 0}
 
