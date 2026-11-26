@@ -602,3 +602,12 @@ class TestCli:
         (tmp_path / ".claude").mkdir()
         (tmp_path / ".claude" / ".credentials.json").write_text("{}")
         assert agent.cli_ready(env)
+
+
+def test_postura_operar_tudo_troca_so_o_trecho_de_cautela():
+    calmo = agent.system_prompt({"aggressive": False})
+    tudo = agent.system_prompt({"aggressive": True})
+    assert calmo == agent.SYSTEM and agent.CAUTIOUS in calmo
+    assert agent.AGGRESSIVE in tudo and "na duvida, nao faca nada" not in tudo
+    assert "Nao infle o alvo" in tudo
+    assert agent.validate_config({"aggressive": True}) == {"aggressive": True}

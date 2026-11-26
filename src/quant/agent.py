@@ -55,6 +55,7 @@ DEFAULTS: dict = {
     "universe": "tudo",        # "tudo", "todos" (20 cripto) ou lista: BTC,NVDA,...
     "edge_min": 2.0,           # o alvo da entrada precisa cobrir N vezes o custo de entrar e sair (0 desliga)
     "shadow": False,           # modo sombra: decide e registra, mas nao envia ordem de abertura
+    "aggressive": False,       # operar tudo: abre em todo candidato com direcao clara (as travas continuam)
 }
 
 # taxa por lado em bps, medida nas execucoes da Kalshi demo de 24 a 26/11/2026 (valor tipico mais alto de cada classe)
@@ -90,7 +91,7 @@ def validate_config(updates: dict) -> dict:
         raise ConfigError(f"parametro nao permitido: {', '.join(sorted(unknown))}")
     out: dict = {}
     for k, v in updates.items():
-        if k in ("enabled", "long_only", "shadow"):
+        if k in ("enabled", "long_only", "shadow", "aggressive"):
             if not isinstance(v, bool):
                 raise ConfigError(f"{k} deve ser verdadeiro ou falso")
             out[k] = v
@@ -305,6 +306,18 @@ Regras:
 - Cada acao leva um 'motivo' curto e verificavel nos numeros recebidos.
 Responda SEMPRE chamando a ferramenta 'decide'."""
 
+# postura "operar tudo": troca so o trecho que manda ficar parado; custos, stop e limites seguem iguais
+CAUTIOUS = """Seu objetivo e expectativa positiva DEPOIS dos custos, nao atividade: \
+na duvida, nao faca nada (acoes vazias e uma resposta valida e frequentemente a melhor)."""
+AGGRESSIVE = """O dono da conta pediu para operar todas as oportunidades. Avalie cada candidato nos \
+dois lados (comprado e vendido, se 'so_comprado' permitir) e abra TODOS os que tiverem direcao clara nos numeros e \
+alvo realista acima de 'ganho_minimo_pct', os mais fortes primeiro, ate as vagas e o maximo de acoes do ciclo. Fique \
+parado apenas se nenhum candidato cumprir isso."""
+
+
+def system_prompt(cfg: dict) -> str:
+    return SYSTEM.replace(CAUTIOUS, AGGRESSIVE) if cfg["aggressive"] else SYSTEM
+
 TOOL = {
     "name": "decide",
     "description": "Registra a decisao deste ciclo: uma analise curta e a lista de acoes (pode ser vazia).",
@@ -500,7 +513,8 @@ def run_cycle(cfg: dict, deps: Deps, book: dict, closed: dict | None = None) -> 
         if price and pos["side"] * (price - stop) <= 0:
             forced = [f for f in forced if f["ativo"] != a]
             forced.append({"acao": "fechar", "ativo": a, "motivo": "stop simulado", "preco": stop})
-    cand = pick_candidates(rows, set(held), cfg["candidates"], cfg["max_usd"])
+    livres = [r for r in rows if r["asset"] in held or not (runner_active and r["asset"] in runner_assets)]
+    cand = pick_candidates(livres, set(held), cfg["candidates"], cfg["max_usd"])
     with ThreadPoolExecutor(max_workers=8) as pool:
         nomes = sorted(set(cand) | set(held))
         aberto = dict(zip(nomes, pool.map(lambda a: _safe(deps.is_open, a), nomes), strict=True))
@@ -540,7 +554,7 @@ def run_cycle(cfg: dict, deps: Deps, book: dict, closed: dict | None = None) -> 
     }
     rec["leitura"] = snap["candidatos"]  # os numeros que o modelo viu: o painel mostra e da para auditar
     try:
-        decision, usage = deps.llm(SYSTEM, build_user(snap))
+        decision, usage = deps.llm(system_prompt(cfg), build_user(snap))
     except Exception as e:  # noqa: BLE001 - qualquer falha do modelo = ciclo sem acao (os stops continuam na corretora)
         rec["erro"] = f"{type(e).__name__}: {str(e)[:300]}"
         decision, usage = {"analise": "", "acoes": []}, {}

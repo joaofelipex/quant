@@ -94,7 +94,7 @@ export interface OrderRequest {
 export interface AgentConfig {
   enabled: boolean; model: string; interval_min: number; max_usd: number; max_positions: number; max_daily_loss: number;
   long_only: boolean; stop_min: number; stop_max: number; cooldown_min: number; max_actions: number; max_hold_h: number;
-  candidates: number; universe: string; edge_min: number; shadow: boolean;
+  candidates: number; universe: string; edge_min: number; shadow: boolean; aggressive: boolean;
 }
 export interface AgentAction {
   acao?: string; ativo?: string; status: string; usd?: number; stop_pct?: number; motivo?: string; why?: string;
