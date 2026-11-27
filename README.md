@@ -4,6 +4,8 @@ Pesquisa quantitativa multi-ativo (futuros B3, ações, renda fixa, macro, cript
 agnóstica de plataforma; MT5 e Profit Pro são apenas destinos de execução. Princípio do repo: **o backtest tem que
 tentar derrubar a estratégia**, não confirmá-la.
 
+**Documentação completa:** [docs/README.md](docs/README.md) (arquitetura, robô, IA, painel, operação, pesquisa).
+
 ## Status da pesquisa
 
 | Estudo | Hipótese | Resultado | Status |
@@ -18,6 +20,8 @@ tentar derrubar a estratégia**, não confirmá-la.
 | [`regras_historico`](estudos/regras_historico/README.md) | 8 regras de entrada comprada (momento curto, queda, rompimento, tendência, filtro de taxas) em 19 cripto, 1 h, 2 anos, contra entrada em hora qualquer | Custo 30 bps: 3 de 32 combinações positivas nos dois períodos, nenhuma com t de teste ≥ 3; momento curto perde em todos os prazos | **reprovadas** |
 | [`vela_30min`](estudos/vela_30min/README.md) | Prever a próxima vela de 30 min (modelos e leitura de reversão) em BTC e ETH (Binance) e em metais, índices e câmbio (Kalshi demo) | Há algum sinal (AUC 0,50 a 0,70), menor que o custo: todas as classes perdem com preço executável | **reprovada** |
 | [`ia_intradia`](estudos/ia_intradia/README.md) | A IA e regras de seguir/ir contra o movimento nos perpétuos da Kalshi; ordem limite para pagar menos taxa | Entradas da IA iguais a hora sorteada; a regra contra 4 h em ações (+43 bps na demo, t 2,3) dá −29 bps em produção; limite paga 2 bps em vez de 12, mas a seleção adversa come a economia | **reprovada** |
+| [`eth_ml`](estudos/eth_ml/README.md) | ML prevê a direção do ETH nas próximas horas | AUC ~0,55; líquido negativo; melhor variante Sharpe 0,46 (DSR 0,18) | **reprovada** |
+| [`tsmom_cripto`](estudos/tsmom_cripto/README.md) | Tendência diária multiativo em cripto | Hold-out Sharpe 0,80, alfa t = 0,75, DSR 0,20 | **reprovada** |
 | [`eth_flow`](estudos/eth_flow/README.md) | Scalper de agressão no ETH futuro | 1 dia de dado | hipótese |
 
 Nada acima está liberado para conta real. Diário do que já foi tentado: [`estudos/win_trend/diario.md`](estudos/win_trend/diario.md).
