@@ -157,6 +157,7 @@ class Ctx:
     kill: bool = False
     mode_ok: bool = True                     # kalshi + testnet
     pnl_today: float = 0.0                   # PnL realizado hoje das trades do agente
+    pnl_unknown: bool = False                # a corretora nao respondeu: sem a perda do dia, nada abre
     last_close: dict[str, float] = field(default_factory=dict)  # ativo -> epoch do ultimo fechamento do agente
     now: float = 0.0
     market_closed: set[str] = field(default_factory=set)  # fora do horario de negociacao: nem abre nem fecha
@@ -233,7 +234,9 @@ def validate(actions: list, ctx: Ctx, cfg: dict) -> tuple[list[dict], list[dict]
                 refuse(a, "lado deve ser comprado ou vendido")
             elif side < 0 and cfg["long_only"]:
                 refuse(a, "agente so opera comprado (long_only)")
-            elif ctx.pnl_today <= -cfg["max_daily_loss"]:
+            elif ctx.pnl_unknown and not cfg["shadow"]:
+                refuse(a, "sem a perda do dia confirmada na corretora")
+            elif ctx.pnl_today <= -cfg["max_daily_loss"] and not cfg["shadow"]:  # sombra nao arrisca saldo
                 refuse(a, f"perda do dia ({ctx.pnl_today:.2f}) atingiu o limite de {cfg['max_daily_loss']:.2f}")
             elif asset in held:
                 refuse(a, "ja existe posicao nesse ativo")
@@ -462,7 +465,7 @@ class Deps:
     llm: Callable[[str, str], tuple[dict, dict]]          # (system, user) -> (decide.input, usage)
     execute: Callable[[dict], dict]                       # acao validada -> resultado do manual.execute
     runner: Callable[[], tuple[bool, set[str]]]           # (ativo?, ativos do runner)
-    pnl_today: Callable[[float], float]
+    pnl_today: Callable[[float], float | None]            # None: nao deu para confirmar na corretora
     last_close: Callable[[], dict[str, float]]
     kill: Callable[[], bool]
     mode_ok: Callable[[], bool]
@@ -493,9 +496,10 @@ def run_cycle(cfg: dict, deps: Deps, book: dict, closed: dict | None = None) -> 
     if cfg["shadow"]:
         for a, t in closed.items():
             last_close[a] = max(t, last_close.get(a, 0.0))
+    today = deps.pnl_today(now)
     ctx = Ctx(universe=set(universe), held=held, runner_assets=runner_assets, runner_active=runner_active,
-              kill=deps.kill(), mode_ok=deps.mode_ok(), pnl_today=deps.pnl_today(now), last_close=last_close,
-              now=now)
+              kill=deps.kill(), mode_ok=deps.mode_ok(), pnl_today=today or 0.0, pnl_unknown=today is None,
+              last_close=last_close, now=now)
     rec.update(universo=len(universe), fotos=len(rows), posicoes=sorted(held), pnl_dia=round(ctx.pnl_today, 4))
     if cfg["shadow"]:
         rec["sombra"] = True
@@ -537,7 +541,8 @@ def run_cycle(cfg: dict, deps: Deps, book: dict, closed: dict | None = None) -> 
                     "stop_pct_entre": [cfg["stop_min"], cfg["stop_max"]], "so_comprado": cfg["long_only"],
                     "max_acoes_por_ciclo": cfg["max_actions"], "cooldown_min": cfg["cooldown_min"]},
         "conta": {"posicoes_abertas": len(held), "vagas": max(0, cfg["max_positions"] - len(held)),
-                  "pnl_realizado_hoje_usd": round(ctx.pnl_today, 4), "perda_maxima_dia_usd": cfg["max_daily_loss"]},
+                  "pnl_realizado_hoje_usd": 0.0 if cfg["shadow"] else round(ctx.pnl_today, 4),
+                  "perda_maxima_dia_usd": cfg["max_daily_loss"]},
         "posicoes": [{"ativo": a, "lado": "comprado" if p["side"] > 0 else "vendido",
                       "resultado_pct": round(p["side"] * ((by_asset[a]["mark"] / p["entry"]) - 1) * 100, 2)
                       if a in by_asset and p.get("entry") else None,
@@ -743,6 +748,19 @@ def real_deps(env=os.environ.get, directory: Path = AGENT_DIR) -> Deps:
         active = out.strip() == "active"
         return active, set(names)
 
+    def pnl_today(now: float) -> float | None:
+        """O pior entre o registro local e a corretora (so a corretora ve os stops que ela mesma executou)."""
+        from . import observ
+
+        try:
+            ex = build_kalshi("testnet", env, assets_mod.ticker("BTC"))
+            fills = observ.sync_fills(ex, directory / "fills.jsonl")
+            decisions = list(reversed(read_decisions(directory / "decisions.jsonl", 10**9)))
+            return min(trades_of_agent(trades, now)[0], observ.ai_pnl_day(fills, decisions, now))
+        except Exception:  # noqa: BLE001 - qualquer falha: perda desconhecida, o ciclo nao abre nada
+            log.exception("sem a perda do dia na corretora")
+            return None
+
     return Deps(
         snapshot=lambda names: flow.snapshot_many(names), candles=candles, positions=positions,
         llm=(lambda s, u: call_cli(s, u, model=cfg["model"], binary=env("QUANT_CLAUDE_BIN", "claude"),
@@ -750,7 +768,7 @@ def real_deps(env=os.environ.get, directory: Path = AGENT_DIR) -> Deps:
         if env("QUANT_AGENT_BACKEND", "api") == "cli"
         else (lambda s, u: call_claude(s, u, model=cfg["model"], key=key)),
         execute=execute, runner=runner,
-        pnl_today=lambda now: trades_of_agent(trades, now)[0],
+        pnl_today=pnl_today,
         last_close=lambda: trades_of_agent(trades, time.time())[1],
         kill=lambda: kill.exists(), mode_ok=lambda: env("QUANT_MODE") == "testnet" and env("QUANT_VENUE") == "kalshi",
         record_flow=lambda rows, ts: flow.write_rows(rows, flow_dir, ts), is_open=is_open)
@@ -790,7 +808,7 @@ def run_once(directory: Path = AGENT_DIR, *, force: bool = False, deps: Deps | N
     state.update(last_error=rec["erro"], ciclos=int(state.get("ciclos", 0)) + 1,
                  tokens=int(state.get("tokens", 0)) + sum(int(v or 0) for v in rec["uso"].values()))
     # perda do dia estourada: o agente se desliga sozinho (religar e decisao humana, no painel)
-    if rec["pnl_dia"] <= -cfg["max_daily_loss"] and cfg["enabled"]:
+    if rec["pnl_dia"] <= -cfg["max_daily_loss"] and cfg["enabled"] and not cfg["shadow"]:
         save_config(directory / "config.json", {"enabled": False})
         state["last_error"] = (f"desligado: perda do dia {rec['pnl_dia']:.2f} atingiu o limite "
                                f"{cfg['max_daily_loss']:.2f}")

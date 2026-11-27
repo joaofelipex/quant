@@ -70,6 +70,12 @@ def round_trips(fills: list[dict], opens: list[tuple[str, float]]) -> list[dict]
     return out + list(aberta.values())
 
 
+def ai_pnl_day(fills: list[dict], decisions: list[dict], now: float) -> float:
+    """Resultado de hoje (UTC) das posicoes da IA encerradas, pelos numeros da corretora: inclui stop e liquidacao."""
+    return sum(v["bruto"] - v["taxa"] for v in round_trips(fills, ai_opens(decisions))
+               if v["quem"] == "ia" and v["fim"] is not None and day(v["fim"]) == day(now))
+
+
 def group(trips: list[dict], key) -> list[dict]:
     g: dict = defaultdict(list)
     for v in trips:

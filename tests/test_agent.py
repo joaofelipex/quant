@@ -9,6 +9,7 @@ import pytest
 
 from quant import agent, manual
 from quant.agent import Ctx, Deps, round_trip_bps, validate
+from quant.live import assets as assets_mod
 from quant.live.models import Fill, Position
 
 NOW = 1_795_000_000.0
@@ -611,3 +612,28 @@ def test_postura_operar_tudo_troca_so_o_trecho_de_cautela():
     assert agent.AGGRESSIVE in tudo and "na duvida, nao faca nada" not in tudo
     assert "Nao infle o alvo" in tudo
     assert agent.validate_config({"aggressive": True}) == {"aggressive": True}
+
+
+def test_perda_do_dia_conta_o_stop_executado_pela_corretora():
+    from quant import observ
+
+    def fill(side, pnl, minuto, source="user"):
+        return {"ticker": assets_mod.ticker("NVDA"), "side": side, "count": "1", "realized_pnl": pnl, "fees": "0.5",
+                "order_source": source, "created_time": f"2026-11-27T10:{minuto:02d}:00Z"}
+
+    agora = observ.epoch("2026-11-27T12:00:00Z")
+    abriu = observ.epoch("2026-11-27T10:00:00Z")
+    diario = [{"t": abriu, "acoes": [{"acao": "abrir", "ativo": "NVDA", "status": "executada"}]}]
+    fills = [fill("bid", "0", 0), fill("ask", "-11", 30, "system")]
+    assert observ.ai_pnl_day(fills, diario, agora) == pytest.approx(-12.0)
+    assert observ.ai_pnl_day(fills, [], agora) == 0                      # posicao do robo nao conta para a IA
+    assert observ.ai_pnl_day(fills, diario, agora + 86400) == 0          # outro dia (UTC)
+
+
+def test_trava_do_dia_bloqueia_ordens_mas_nao_a_sombra():
+    abrir = [{"acao": "abrir", "ativo": "BTC", "lado": "comprado", "usd": 10, "stop_pct": 1, "motivo": "x"}]
+    real, sombra = {**CFG, "edge_min": 0}, {**CFG, "edge_min": 0, "shadow": True}
+    perdeu = {"pnl_today": -real["max_daily_loss"]}
+    assert "perda do dia" in validate(abrir, ctx(**perdeu), real)[1][0]["why"]
+    assert "confirmada" in validate(abrir, ctx(pnl_unknown=True), real)[1][0]["why"]
+    assert validate(abrir, ctx(**perdeu), sombra)[0] and validate(abrir, ctx(pnl_unknown=True), sombra)[0]
