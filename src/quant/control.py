@@ -56,14 +56,15 @@ def _int(lo: int, hi: int):
     return check
 
 
-def _num(lo: float, hi: float):
+def _num(lo: float, hi: float, *, zero: bool = False):
+    """Numero em (lo, hi]; ``zero=True`` aceita tambem 0 (desliga o recurso)."""
     def check(v: str) -> str:
         try:
             x = float(v)
         except ValueError:
             raise SettingError(f"{v!r} nao e numero") from None
-        if not (lo < x <= hi) or math.isnan(x):
-            raise SettingError(f"{v} fora do intervalo ({lo}, {hi}]")
+        if not ((lo < x <= hi) or (zero and x == 0)) or math.isnan(x):
+            raise SettingError(f"{v} fora do intervalo ({lo}, {hi}]" + (" nem 0" if zero else ""))
         return format(x, "g")
     return check
 
@@ -87,8 +88,8 @@ SETTINGS = {
     "QUANT_STOP_ATR": _num(0, 10),
     "QUANT_DONCHIAN": _int(2, 500),
     "QUANT_ER": _num(0, 1),
-    "QUANT_FLOW_MIN": _num(0, 1),
-    "QUANT_TRAIL_ATR": _num(0, 10),
+    "QUANT_FLOW_MIN": _num(0, 1, zero=True),
+    "QUANT_TRAIL_ATR": _num(0, 10, zero=True),
     "QUANT_VOL_SIZE": _enum("0", "1"),
     "QUANT_DIRECTION": _enum("both", "long"),
     "QUANT_ASSETS": _assets,

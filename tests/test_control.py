@@ -270,3 +270,11 @@ def test_polkit_inclui_selfcheck_so_com_start():
     svc = (Path(__file__).resolve().parents[1] / "deploy" / "quant-selfcheck.service").read_text()
     assert "OnCalendar" in timer and "quant-live.env" not in "\n".join(
         ln for ln in svc.splitlines() if not ln.startswith("#"))
+
+
+def test_trailing_e_filtro_de_fluxo_aceitam_zero_para_desligar(tmp_path):
+    p = tmp_path / "runtime.env"
+    got = control.write_runtime(p, {"QUANT_TRAIL_ATR": "0", "QUANT_FLOW_MIN": "0"})
+    assert got["QUANT_TRAIL_ATR"] == "0" and got["QUANT_FLOW_MIN"] == "0"
+    with pytest.raises(control.SettingError):
+        control.write_runtime(p, {"QUANT_STOP_ATR": "0"})
